@@ -14,18 +14,24 @@ function StatCard({ label, value, unit }) {
   )
 }
 
-function EntryCard({ entry, onDelete }) {
+function EntryCard({ entry, onDelete, onStatusChange }) {
   const cat = getCategoryById(entry.category_id)
   const time = new Date(entry.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  const isComplete = entry.status === 'complete'
   return (
     <div
       className="border-y border-r border-border rounded-r-lg p-5 bg-surface-low hover:bg-surface-high transition-colors group"
-      style={{ borderLeft: "4px solid " + cat.color }}
+      style={{ borderLeft: "4px solid " + (isComplete ? '#374151' : cat.color) }}
     >
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: cat.color }}>{cat.short}</span>
           <span className="text-text-muted text-xs">· {time}</span>
+          {isComplete && (
+            <span className="text-[10px] bg-green-400/10 text-green-400 border border-green-400/20 px-2 py-0.5 rounded-full">
+              Complete
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-3">
           {entry.minutes && (
@@ -34,6 +40,17 @@ function EntryCard({ entry, onDelete }) {
               {entry.minutes}m
             </span>
           )}
+          <button
+            onClick={() => onStatusChange(entry.id, isComplete ? 'active' : 'complete')}
+            title={isComplete ? 'Mark as active' : 'Mark as complete'}
+            className={`text-xs px-2 py-1 rounded border transition-all ${isComplete
+              ? 'border-green-400/30 text-green-400 hover:bg-green-400/10'
+              : 'border-border text-text-muted hover:border-green-400/50 hover:text-green-400'
+              }`}
+          ><span className="material-symbols-outlined" style={{ fontSize: '14px' }}>
+              {isComplete ? 'check_circle' : 'radio_button_unchecked'}
+            </span>
+          </button>
           <button onClick={() => onDelete(entry.id)} className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-red-400 transition-all">
             <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>delete</span>
           </button>
@@ -146,6 +163,17 @@ export default function Dashboard() {
     setEntries(entries.filter(e => e.id !== id))
   }
 
+  async function handleStatusChange(id, newStatus) {
+    await supabase
+      .from('entries')
+      .update({ status: newStatus })
+      .eq('id', id)
+
+    setEntries(entries.map(e =>
+      e.id === id ? { ...e, status: newStatus } : e
+    ))
+  }
+
   const totalMins = entries.reduce((s, e) => s + (e.minutes || 0), 0)
   const catCounts = {}
   entries.forEach(e => { catCounts[e.category_id] = (catCounts[e.category_id] || 0) + (e.minutes || 0) })
@@ -237,7 +265,7 @@ export default function Dashboard() {
                 <span className="material-symbols-outlined block mx-auto mb-2" style={{ fontSize: '32px' }}>edit_note</span>
                 No entries yet today. Log something above!
               </div>
-            ) : entries.map(entry => <EntryCard key={entry.id} entry={entry} onDelete={handleDelete} />)}
+            ) : entries.map(entry => <EntryCard key={entry.id} entry={entry} onDelete={handleDelete} onStatusChange={handleStatusChange} />)}
           </div>
         </div>
       </div>
