@@ -14,7 +14,7 @@ function AppRoutes() {
 
   if (loading) return (
     <div className="min-h-screen bg-bg flex items-center justify-center">
-      <div className="text-text-muted text-sm">Loading ShiftLog...</div>
+      <div className="text-text-muted text-sm">Loading GrindLog...</div>
     </div>
   )
 
@@ -25,12 +25,12 @@ function AppRoutes() {
       <Sidebar />
       <TopBar />
       <Routes>
-        <Route path="/"         element={<Dashboard />} />
+        <Route path="/" element={<Dashboard />} />
         <Route path="/left-off" element={<WhereILeftOff />} />
-        <Route path="/history"  element={<History />} />
+        <Route path="/history" element={<History />} />
         <Route path="/progress" element={<ProgressTracker />} />
-        <Route path="/goals"    element={<Goals />} />
-        <Route path="*"         element={<Navigate to="/" />} />
+        <Route path="/goals" element={<Goals />} />
+        <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </>
   )
