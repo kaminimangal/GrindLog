@@ -1,31 +1,80 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { supabase } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
 
 const goals = [
-  { id: 1, cat: 'DSA',           catColor: '#9333EA', title: 'Master Data Structures',  deadline: 'Dec 15, 2023', milestones: '8/12', progress: 65 },
+  { id: 1, cat: 'DSA', catColor: '#9333EA', title: 'Master Data Structures', deadline: 'Dec 15, 2023', milestones: '8/12', progress: 65 },
   { id: 2, cat: 'SYSTEM DESIGN', catColor: '#3B82F6', title: 'Prepare for Senior Roles', deadline: 'Jan 30, 2024', milestones: '3/10', progress: 30 },
 ]
 
 const initialTasks = [
-  { id: 1, done: false, text: 'Solve 5 LeetCode Hard problems (Graph Theory)',         tag: 'DSA',           tagColor: '#9333EA', priority: 'High', day: 'Tue' },
-  { id: 2, done: true,  text: 'Review Load Balancer strategies & case studies',          tag: 'System Design', tagColor: '#3B82F6', priority: 'Done', day: 'Mon' },
-  { id: 3, done: false, text: 'Read "Designing Data-Intensive Applications" Ch. 4',     tag: 'Books',         tagColor: '#10B981', priority: 'Med',  day: 'Thu' },
-  { id: 4, done: false, text: 'Implement a consistent hashing algorithm',               tag: 'Practical',     tagColor: '#F59E0B', priority: 'High', day: 'Fri' },
+  { id: 1, done: false, text: 'Solve 5 LeetCode Hard problems (Graph Theory)', tag: 'DSA', tagColor: '#9333EA', priority: 'High', day: 'Tue' },
+  { id: 2, done: true, text: 'Review Load Balancer strategies & case studies', tag: 'System Design', tagColor: '#3B82F6', priority: 'Done', day: 'Mon' },
+  { id: 3, done: false, text: 'Read "Designing Data-Intensive Applications" Ch. 4', tag: 'Books', tagColor: '#10B981', priority: 'Med', day: 'Thu' },
+  { id: 4, done: false, text: 'Implement a consistent hashing algorithm', tag: 'Practical', tagColor: '#F59E0B', priority: 'High', day: 'Fri' },
 ]
 
-const achievements = [
-  { title: 'AWS Solutions Architect Cert', date: "Oct '23" },
-  { title: 'React Performance Audit',      date: "Sep '23" },
-  { title: 'Legacy codebase refactor',     date: "Aug '23" },
-]
-
-const weekDays = ['M','T','W','T','F','S','S']
-const doneIdx = [0,1,2]
+const weekDays = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+const doneIdx = [0, 1, 2]
 
 export default function Goals() {
+  const { user } = useAuth()
   const [tasks, setTasks] = useState(initialTasks)
   const [showNewGoal, setShowNewGoal] = useState(false)
+  const [streak, setStreak] = useState(0)
+  const [loggedThisWeek, setLoggedThisWeek] = useState([]) // ← ADD THIS
+  const [totalEntries, setTotalEntries] = useState(0)      // ← ADD THIS
 
-  const toggle = (id) => setTasks(t => t.map(x => x.id === id ? {...x, done: !x.done} : x))
+  useEffect(() => { if (user) loadStreak() }, [user])
+
+  async function loadStreak() {
+    const { data } = await supabase.from('entries').select('date, created_at').eq('user_id', user.id)
+    if (!data || data.length === 0) { setStreak(0); return }
+
+    setTotalEntries(data.length) // ← real total
+
+    // Real streak
+    const uniqueDates = [...new Set(data.map(e => e.date))].sort((a, b) => b.localeCompare(a))
+    let count = 0
+    let checkDate = new Date(); checkDate.setHours(0, 0, 0, 0)
+    for (let dateStr of uniqueDates) {
+      const diff = Math.round((checkDate - new Date(dateStr + 'T00:00:00')) / 86400000)
+      if (diff === 0 || diff === 1) { count++; checkDate = new Date(dateStr + 'T00:00:00') }
+      else break
+    }
+    setStreak(count)
+
+    // Real this-week logged days (0=Mon, 6=Sun)
+    const weekStart = new Date()
+    const diff = weekStart.getDay() === 0 ? 6 : weekStart.getDay() - 1
+    weekStart.setDate(weekStart.getDate() - diff); weekStart.setHours(0, 0, 0, 0)
+    const logged = []
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(weekStart); d.setDate(weekStart.getDate() + i)
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      if (data.some(e => e.date === dateStr)) logged.push(i)
+    }
+    setLoggedThisWeek(logged)
+  }
+
+  const weekStart = new Date()
+  const diff = weekStart.getDay() === 0 ? 6 : weekStart.getDay() - 1
+  weekStart.setDate(weekStart.getDate() - diff)
+  const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6)
+  const weekLabel = weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' - ' + weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+
+  // Real achievements — INSIDE component, uses real state
+  const realAchievements = []
+  if (totalEntries >= 1) realAchievements.push({ title: 'First log! The journey begins.', date: '🌱' })
+  if (totalEntries >= 10) realAchievements.push({ title: '10 logs completed!', date: '⚡' })
+  if (totalEntries >= 50) realAchievements.push({ title: '50 logs — serious grinder!', date: '🔥' })
+  if (streak >= 7) realAchievements.push({ title: '7-day streak achieved!', date: '🏆' })
+  if (streak >= 14) realAchievements.push({ title: '14-day streak — unstoppable!', date: '💎' })
+  if (realAchievements.length === 0) realAchievements.push({ title: 'Log your first entry to unlock achievements!', date: '🎯' })
+
+
+  const todayIndex = (new Date().getDay() + 6) % 7  // converts Sun=0 to Mon=0 system
+  const toggle = (id) => setTasks(t => t.map(x => x.id === id ? { ...x, done: !x.done } : x))
 
   return (
     <div className="ml-[240px] mt-14 p-8 max-w-[1200px]">
@@ -39,7 +88,7 @@ export default function Goals() {
           onClick={() => setShowNewGoal(true)}
           className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded text-sm font-semibold transition-all active:scale-[0.99]"
         >
-          <span className="material-symbols-outlined" style={{fontSize:'18px'}}>add</span>
+          <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>add</span>
           New Goal
         </button>
       </div>
@@ -51,7 +100,7 @@ export default function Goals() {
           {/* Active Objectives */}
           <section>
             <div className="flex items-center gap-2 mb-4">
-              <span className="material-symbols-outlined text-primary" style={{fontSize:'20px'}}>bolt</span>
+              <span className="material-symbols-outlined text-primary" style={{ fontSize: '20px' }}>bolt</span>
               <h2 className="text-lg font-semibold text-text-primary">Active Objectives</h2>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -72,7 +121,7 @@ export default function Goals() {
                       {goal.cat}
                     </span>
                     <button className="text-text-muted hover:text-text-primary">
-                      <span className="material-symbols-outlined" style={{fontSize:'18px'}}>more_horiz</span>
+                      <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>more_horiz</span>
                     </button>
                   </div>
 
@@ -80,11 +129,11 @@ export default function Goals() {
 
                   <div className="flex items-center gap-4 text-xs text-text-muted mb-5">
                     <span className="flex items-center gap-1">
-                      <span className="material-symbols-outlined" style={{fontSize:'14px'}}>calendar_today</span>
+                      <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>calendar_today</span>
                       {goal.deadline}
                     </span>
                     <span className="flex items-center gap-1">
-                      <span className="material-symbols-outlined" style={{fontSize:'14px'}}>flag</span>
+                      <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>flag</span>
                       {goal.milestones} Milestones
                     </span>
                   </div>
@@ -92,12 +141,12 @@ export default function Goals() {
                   <div>
                     <div className="flex justify-between text-xs mb-1.5">
                       <span className="text-text-muted">Progress</span>
-                      <span className="font-medium" style={{color: goal.catColor}}>{goal.progress}%</span>
+                      <span className="font-medium" style={{ color: goal.catColor }}>{goal.progress}%</span>
                     </div>
                     <div className="w-full h-1.5 bg-border rounded-full overflow-hidden">
                       <div
                         className="h-full rounded-full"
-                        style={{width:`${goal.progress}%`, backgroundColor: goal.catColor}}
+                        style={{ width: `${goal.progress}%`, backgroundColor: goal.catColor }}
                       />
                     </div>
                   </div>
@@ -110,10 +159,10 @@ export default function Goals() {
           <section>
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[#F59E0B]" style={{fontSize:'20px'}}>event_available</span>
+                <span className="material-symbols-outlined text-[#F59E0B]" style={{ fontSize: '20px' }}>event_available</span>
                 <h2 className="text-lg font-semibold text-text-primary">Weekly Milestones</h2>
               </div>
-              <span className="text-xs text-text-muted font-mono">Week 48 • Nov 27 - Dec 3</span>
+              <span className="text-xs text-text-muted font-mono">{weekLabel}</span>
             </div>
 
             <div className="border border-border rounded-lg overflow-hidden bg-surface-low">
@@ -125,21 +174,20 @@ export default function Goals() {
                 >
                   <div className="flex items-center gap-4">
                     <div
-                      className={`w-5 h-5 border-2 rounded flex items-center justify-center flex-shrink-0 transition-all ${
-                        task.done
-                          ? 'bg-primary border-primary'
-                          : 'border-border hover:border-primary'
-                      }`}
+                      className={`w-5 h-5 border-2 rounded flex items-center justify-center flex-shrink-0 transition-all ${task.done
+                        ? 'bg-primary border-primary'
+                        : 'border-border hover:border-primary'
+                        }`}
                     >
                       {task.done && (
-                        <span className="material-symbols-outlined text-white" style={{fontSize:'13px'}}>check</span>
+                        <span className="material-symbols-outlined text-white" style={{ fontSize: '13px' }}>check</span>
                       )}
                     </div>
                     <div>
                       <p className={`text-sm ${task.done ? 'line-through text-text-muted' : 'text-text-primary'}`}>
                         {task.text}
                       </p>
-                      <span className="text-[11px] font-mono" style={{color: task.tagColor}}>
+                      <span className="text-[11px] font-mono" style={{ color: task.tagColor }}>
                         {task.tag} • {task.priority === 'Done' ? 'Completed' : `Priority: ${task.priority}`}
                       </span>
                     </div>
@@ -157,10 +205,10 @@ export default function Goals() {
           <div className="border border-border rounded-lg p-5 bg-surface-low">
             <div className="flex items-center gap-3 mb-5">
               <div className="w-10 h-10 rounded-lg bg-orange-500/15 flex items-center justify-center">
-                <span className="material-symbols-outlined text-orange-400" style={{fontSize:'20px'}}>local_fire_department</span>
+                <span className="material-symbols-outlined text-orange-400" style={{ fontSize: '20px' }}>local_fire_department</span>
               </div>
               <div>
-                <p className="text-base font-semibold text-text-primary">12 Day Streak</p>
+                <p className="text-base font-semibold text-text-primary">{streak} Day Streak</p>
                 <p className="text-xs text-text-muted">Consistency is key.</p>
               </div>
             </div>
@@ -170,16 +218,15 @@ export default function Goals() {
                 <div key={i} className="flex flex-col items-center gap-1">
                   <span className="text-[10px] text-text-muted">{d}</span>
                   <div
-                    className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium ${
-                      doneIdx.includes(i)
-                        ? 'bg-orange-500 text-white'
-                        : i === 3
+                    className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium ${loggedThisWeek.includes(i)
+                      ? 'bg-orange-500 text-white'
+                      : i === todayIndex
                         ? 'border-2 border-orange-500/50 text-orange-400'
                         : 'border border-border text-text-muted'
-                    }`}
+                      }`}
                   >
-                    {doneIdx.includes(i)
-                      ? <span className="material-symbols-outlined text-white" style={{fontSize:'13px'}}>check</span>
+                    {loggedThisWeek.includes(i)
+                      ? <span className="material-symbols-outlined text-white" style={{ fontSize: '13px' }}>check</span>
                       : i + 1}
                   </div>
                 </div>
@@ -189,7 +236,12 @@ export default function Goals() {
             <div className="w-full h-14 rounded bg-bg border border-border flex items-end p-3">
               <div>
                 <p className="text-[10px] text-orange-400 font-mono">Next Milestone:</p>
-                <p className="text-xs font-semibold text-text-primary">15-Day Peak Performance</p>
+                <p className="text-xs font-semibold text-text-primary">
+                  {streak < 7 ? `${7 - streak} more days → 7-day streak!`
+                    : streak < 14 ? `${14 - streak} more days → 2-week streak!`
+                      : streak < 30 ? `${30 - streak} more days → 30-day streak!`
+                        : '🔥 Legend status unlocked!'}
+                </p>
               </div>
             </div>
           </div>
@@ -197,14 +249,14 @@ export default function Goals() {
           {/* Recent Achievements */}
           <div className="border border-border rounded-lg p-5 bg-surface-low">
             <div className="flex items-center gap-2 mb-4">
-              <span className="material-symbols-outlined text-text-muted" style={{fontSize:'16px'}}>archive</span>
+              <span className="material-symbols-outlined text-text-muted" style={{ fontSize: '16px' }}>archive</span>
               <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted">Recent Achievements</p>
             </div>
             <div className="space-y-2">
-              {achievements.map(a => (
+              {realAchievements.map(a => (
                 <div key={a.title} className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-surface-high transition-colors">
                   <div className="flex items-center gap-3">
-                    <span className="material-symbols-outlined text-[#10B981]" style={{fontSize:'16px'}}>task_alt</span>
+                    <span className="material-symbols-outlined text-[#10B981]" style={{ fontSize: '16px' }}>task_alt</span>
                     <span className="text-sm text-text-secondary">{a.title}</span>
                   </div>
                   <span className="text-[11px] text-text-muted font-mono flex-shrink-0 ml-2">{a.date}</span>
@@ -213,7 +265,7 @@ export default function Goals() {
             </div>
             <button className="w-full mt-3 py-2 text-xs text-text-muted hover:text-primary transition-colors flex items-center justify-center gap-1">
               View Full Archive
-              <span className="material-symbols-outlined" style={{fontSize:'14px'}}>arrow_forward</span>
+              <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>arrow_forward</span>
             </button>
           </div>
         </div>
