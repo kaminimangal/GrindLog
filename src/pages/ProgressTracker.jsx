@@ -1,59 +1,8 @@
+import { useState, useEffect } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
-
-const chartData = [
-  { date: 'Oct 20', mins: 85 },
-  { date: 'Oct 21', mins: 120 },
-  { date: 'Oct 22', mins: 60 },
-  { date: 'Oct 23', mins: 200 },
-  { date: 'Oct 24', mins: 95 },
-  { date: 'Oct 25', mins: 140 },
-  { date: 'Oct 26', mins: 75 },
-  { date: 'Oct 27', mins: 180 },
-  { date: 'Oct 28', mins: 110 },
-  { date: 'Oct 29', mins: 90 },
-  { date: 'Oct 30', mins: 220 },
-  { date: 'Oct 31', mins: 130 },
-  { date: 'Nov 1',  mins: 160 },
-  { date: 'Nov 2',  mins: 50  },
-  { date: 'Nov 3',  mins: 195 },
-  { date: 'Nov 4',  mins: 80  },
-  { date: 'Nov 5',  mins: 145 },
-  { date: 'Nov 6',  mins: 100 },
-  { date: 'Nov 7',  mins: 170 },
-  { date: 'Nov 8',  mins: 230 },
-  { date: 'Nov 9',  mins: 65  },
-  { date: 'Nov 10', mins: 190 },
-  { date: 'Nov 11', mins: 115 },
-  { date: 'Nov 12', mins: 250 },
-  { date: 'Nov 13', mins: 88  },
-  { date: 'Nov 14', mins: 135 },
-  { date: 'Nov 15', mins: 175 },
-  { date: 'Nov 16', mins: 210 },
-  { date: 'Nov 17', mins: 95  },
-  { date: 'Nov 18', mins: 160 },
-]
-
-const skills = [
-  { label: 'Data Structures & Algorithms', hours: 42.5, color: '#9333EA', pct: 75 },
-  { label: 'System Design',               hours: 28.2, color: '#3B82F6', pct: 50 },
-  { label: 'ML & Math',                   hours: 19.8, color: '#F59E0B', pct: 35 },
-  { label: 'Computer Networking',         hours: 15.5, color: '#14B8A6', pct: 27 },
-  { label: 'Books',                       hours: 12.0, color: '#10B981', pct: 21 },
-  { label: 'Job Applications',            hours: 8.5,  color: '#F97316', pct: 15 },
-]
-
-const milestones = [
-  { icon: '🏆', title: '50 LeetCode Solved',    desc: 'Medium to Hard difficulty focus. Completed 3 days ago.' },
-  { icon: '🎯', title: 'System Design Intro',   desc: 'Fundamentals and Scalability module finished.' },
-  { icon: '⭐', title: '30 Day Study Streak',   desc: 'Achieved 2 weeks ago. Currently on a new 12-day run.' },
-]
-
-const statCards = [
-  { label: 'Total Hours Studied', value: '142h', sub: '↑ 12% from last month', icon: 'schedule',       subColor: '#10B981' },
-  { label: 'Top Category',        value: 'DSA',  sub: '42.5 hours total',       icon: 'code',           subColor: '#6B7280' },
-  { label: 'Weekly Consistency',  value: '92%',  sub: null,                     icon: 'bolt',           subColor: null, isBar: true },
-  { label: 'Current Streak',      value: '12 days', sub: 'Personal best: 24 days', icon: 'local_fire_department', subColor: '#6B7280' },
-]
+import { CATEGORIES, getCategoryById } from '../data'
+import { supabase } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
@@ -68,105 +17,298 @@ const CustomTooltip = ({ active, payload, label }) => {
 }
 
 export default function ProgressTracker() {
+  const { user } = useAuth()
+  const [allEntries, setAllEntries] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [dateRange, setDateRange] = useState('30days')
+
+  async function loadEntries() {
+    const { data } = await supabase
+      .from('entries')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+    if (data) setAllEntries(data)
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    if (user) loadEntries()
+  }, [user])
+
+  // Calculate start date based on selected range
+  function getRangeStart(range) {
+    const now = new Date()
+    if (range === '7days') {
+      const d = new Date(); d.setDate(now.getDate() - 7); return [d, 7]
+    }
+    if (range === '30days') {
+      const d = new Date(); d.setDate(now.getDate() - 30); return [d, 30]
+    }
+    if (range === '90days') {
+      const d = new Date(); d.setDate(now.getDate() - 90); return [d, 90]
+    }
+    return [null, 90] // 'all' → no start date limit
+  }
+
+  const [rangeStart, numDays] = getRangeStart(dateRange)
+
+  // ← ADD THIS LINE:
+  const filteredEntries = rangeStart ? allEntries.filter(e => new Date(e.date + 'T00:00:00') >= rangeStart) : allEntries
+
+  // ── REAL STAT 1: Total hours ──
+  const totalMins = filteredEntries.reduce((s, e) => s + (e.minutes || 0), 0)
+  const totalHours = (totalMins / 60).toFixed(1)
+
+  // ── REAL STAT 2: Top category ──
+  const catMins = {}
+  filteredEntries.forEach(e => {
+    catMins[e.category_id] = (catMins[e.category_id] || 0) + (e.minutes || 0)
+  })
+  const topCatId = Object.entries(catMins).sort((a, b) => b[1] - a[1])[0]?.[0]
+  const topCat = topCatId ? getCategoryById(topCatId) : null
+
+  // ── REAL STAT 3: Streak ──
+  const uniqueDates = [...new Set(allEntries.map(e => e.date))]
+    .sort((a, b) => b.localeCompare(a))
+  let streak = 0
+  let checkDate = new Date(); checkDate.setHours(0, 0, 0, 0)
+  for (let dateStr of uniqueDates) {
+    const entryDate = new Date(dateStr + 'T00:00:00')
+    const diff = Math.round((checkDate - entryDate) / 86400000)
+    if (diff === 0 || diff === 1) { streak++; checkDate = entryDate }
+    else break
+  }
+
+  // ── REAL STAT 4: Weekly consistency ──
+  const last7Days = [...Array(7)].map((_, i) => {
+    const d = new Date(); d.setDate(d.getDate() - i)
+    return d.toISOString().slice(0, 10)
+  })
+  const daysWithEntries = last7Days.filter(day =>
+    allEntries.some(e => e.date === day)
+  ).length
+  const consistency = Math.round((daysWithEntries / 7) * 100)
+
+  // ── REAL CHART DATA: Last 30 days ──
+  const realChartData = [...Array(numDays)].map((_, i) => {
+    const d = new Date()
+    d.setDate(d.getDate() - (numDays - 1 - i))
+    const dateStr = d.toISOString().slice(0, 10)
+    const dayMins = allEntries
+      .filter(e => e.date === dateStr)
+      .reduce((s, e) => s + (e.minutes || 0), 0)
+    return {
+      date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      mins: dayMins,
+    }
+  })
+  const maxMins = Math.max(...realChartData.map(d => d.mins), 0)
+
+  // ── REAL SKILL BREAKDOWN ──
+  const skillData = CATEGORIES.map(cat => {
+    const mins = filteredEntries
+      .filter(e => e.category_id === cat.id)
+      .reduce((s, e) => s + (e.minutes || 0), 0)
+    return { ...cat, hours: (mins / 60).toFixed(1), mins }
+  }).filter(s => s.mins > 0).sort((a, b) => b.mins - a.mins)
+  const maxSkillMins = skillData[0]?.mins || 1
+
+  // ── REAL MILESTONES ──
+  const totalEntries = allEntries.length
+  const completeCount = allEntries.filter(e => e.status === 'complete').length
+  const milestones = [
+    {
+      icon: '📝',
+      title: `${totalEntries} Total Logs`,
+      desc: totalEntries >= 50
+        ? 'Incredible consistency. You are building a real habit.'
+        : `${50 - totalEntries} more to hit 50 logs!`,
+    },
+    {
+      icon: '✅',
+      title: `${completeCount} Tasks Completed`,
+      desc: completeCount > 0
+        ? 'You follow through. That separates you from 90% of people.'
+        : 'Mark your first entry as complete on the dashboard!',
+    },
+    {
+      icon: '🔥',
+      title: `${streak} Day Streak`,
+      desc: streak >= 7
+        ? 'A week straight! Consistency is your superpower.'
+        : streak > 0
+          ? `${7 - streak} more days to hit a 7-day streak!`
+          : 'Log today to start your streak!',
+    },
+  ]
+
+  // ── REAL DEEP INSIGHT ──
+  const hourCounts = {}
+  allEntries.forEach(e => {
+    const hour = new Date(e.created_at).getHours()
+    hourCounts[hour] = (hourCounts[hour] || 0) + 1
+  })
+  const topHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]?.[0]
+  const topHourLabel = topHour
+    ? `${topHour % 12 || 12}:00 ${topHour >= 12 ? 'PM' : 'AM'}`
+    : null
+
+  if (loading) return (
+    <div className="ml-[240px] mt-14 p-8 text-text-muted text-sm">
+      Loading your stats...
+    </div>
+  )
+
+  if (allEntries.length === 0) return (
+    <div className="ml-[240px] mt-14 p-8 max-w-[1200px]">
+      <div className="border border-border rounded-lg p-16 text-center">
+        <span className="material-symbols-outlined block mx-auto mb-3 text-text-muted" style={{ fontSize: '40px' }}>monitoring</span>
+        <p className="text-text-primary font-medium mb-1">No data yet</p>
+        <p className="text-text-muted text-sm">Start logging on the Dashboard and your stats will appear here.</p>
+      </div>
+    </div>
+  )
+
   return (
     <div className="ml-[240px] mt-14 p-8 max-w-[1200px]">
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-text-primary">Progress Tracker</h1>
-          <p className="text-text-muted text-sm mt-1">Analyzing your cognitive performance and study trends.</p>
+          <p className="text-text-muted text-sm mt-1">Your real stats from your real grind.</p>
         </div>
-        <button className="flex items-center gap-2 border border-border text-text-secondary text-sm px-3 py-2 rounded hover:bg-surface-low transition-colors">
-          <span className="material-symbols-outlined" style={{fontSize:'16px'}}>calendar_today</span>
-          Last 30 Days
-          <span className="material-symbols-outlined" style={{fontSize:'16px'}}>expand_more</span>
-        </button>
       </div>
 
-      {/* Stat cards */}
+      {/* Real Stat cards */}
       <div className="grid grid-cols-4 gap-4 mb-6">
-        {statCards.map((card) => (
-          <div key={card.label} className="border border-border rounded-lg p-5 bg-surface-low">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted">{card.label}</p>
-              <span className="material-symbols-outlined text-text-muted" style={{fontSize:'16px'}}>{card.icon}</span>
-            </div>
-            <p className="text-2xl font-semibold text-text-primary mb-2">{card.value}</p>
-            {card.isBar ? (
-              <div className="w-full h-1 bg-border rounded-full overflow-hidden">
-                <div className="h-full bg-[#F59E0B] rounded-full" style={{width:'92%'}} />
-              </div>
-            ) : (
-              <p className="text-xs" style={{color: card.subColor}}>{card.sub}</p>
-            )}
+        <div className="border border-border rounded-lg p-5 bg-surface-low">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted">Total Hours</p>
+            <span className="material-symbols-outlined text-text-muted" style={{ fontSize: '16px' }}>schedule</span>
           </div>
-        ))}
+          <p className="text-2xl font-semibold text-text-primary">{totalHours}<span className="text-text-muted text-sm font-normal ml-1">h</span></p>
+          <p className="text-xs text-text-muted mt-1">{totalEntries} log entries</p>
+        </div>
+
+        <div className="border border-border rounded-lg p-5 bg-surface-low">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted">Top Category</p>
+            <span className="material-symbols-outlined text-text-muted" style={{ fontSize: '16px' }}>code</span>
+          </div>
+          <p className="text-xl font-semibold" style={{ color: topCat?.color || '#eadfee' }}>
+            {topCat?.label || '—'}
+          </p>
+          <p className="text-xs text-text-muted mt-1">
+            {topCat ? (catMins[topCat.id] / 60).toFixed(1) + 'h logged' : ''}
+          </p>
+        </div>
+
+        <div className="border border-border rounded-lg p-5 bg-surface-low">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted">Weekly Consistency</p>
+            <span className="material-symbols-outlined text-text-muted" style={{ fontSize: '16px' }}>bolt</span>
+          </div>
+          <p className="text-2xl font-semibold text-text-primary">{consistency}%</p>
+          <div className="w-full h-1 bg-border rounded-full overflow-hidden mt-2">
+            <div className="h-full bg-[#F59E0B] rounded-full" style={{ width: consistency + '%' }} />
+          </div>
+        </div>
+
+        <div className="border border-border rounded-lg p-5 bg-surface-low">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted">Current Streak</p>
+            <span className="material-symbols-outlined text-text-muted" style={{ fontSize: '16px' }}>local_fire_department</span>
+          </div>
+          <p className="text-2xl font-semibold text-text-primary">
+            {streak}<span className="text-text-muted text-sm font-normal ml-1">{streak === 1 ? 'day' : 'days'}</span>
+          </p>
+          <p className="text-xs text-text-muted mt-1">
+            {streak >= 7 ? '🔥 On fire!' : streak > 0 ? 'Keep going!' : 'Log today!'}
+          </p>
+        </div>
       </div>
 
-      {/* Chart */}
+      {/* Real Chart */}
       <div className="border border-border rounded-lg p-6 bg-surface-low mb-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-text-primary">Focus Distribution</h2>
+          <h2 className="text-base font-semibold text-text-primary">Focus Distribution - Last {numDays} Days</h2>
+          {/* Date range filter */}
+          <div className="flex gap-2 mb-3 flex-wrap">
+            {[
+              { id: '7days', label: 'Last 7 days' },
+              { id: '30days', label: 'Last 30 days' },
+              { id: '90days', label: 'Last 90 days' },
+            ].map(range => (
+              <button
+                key={range.id}
+                onClick={() => setDateRange(range.id)}
+                className={`px-3 py-1.5 rounded text-xs font-medium border transition-all ${dateRange === range.id
+                  ? 'bg-primary text-white border-primary'
+                  : 'border-border text-text-muted hover:bg-surface-low'
+                  }`}
+              >
+                {range.id === 'all' ? '📅' : '🗓️'} {range.label}
+              </button>
+            ))}
+          </div>
           <div className="flex items-center gap-2 text-xs text-text-muted">
             <span className="w-2 h-2 rounded-full bg-primary inline-block" />
             Minutes per day
           </div>
         </div>
-        <ResponsiveContainer width="100%" height={240}>
-          <BarChart data={chartData} barSize={14} margin={{left:-20, right:0, top:4, bottom:0}}>
-            <XAxis
-              dataKey="date"
-              tick={{fill:'#6B7280', fontSize:11}}
-              tickLine={false}
-              axisLine={false}
-              interval={6}
-            />
-            <YAxis tick={{fill:'#6B7280', fontSize:11}} tickLine={false} axisLine={false} />
-            <Tooltip content={<CustomTooltip />} cursor={{fill:'rgba(147,51,234,0.08)'}} />
-            <Bar dataKey="mins" radius={[2,2,0,0]}>
-              {chartData.map((entry, i) => (
-                <Cell
-                  key={i}
-                  fill={entry.mins === Math.max(...chartData.map(d => d.mins)) ? '#9333EA' : '#2e2832'}
-                />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+        {totalMins === 0 ? (
+          <p className="text-text-muted text-sm text-center py-8">
+            No minutes logged yet. Add time spent when logging!
+          </p>
+        ) : (
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={realChartData} barSize={numDays === 7 ? 20 : numDays === 90 ? 5 : 14} margin={{ left: -20, right: 0, top: 4, bottom: 0 }}>
+              <XAxis dataKey="date" tick={{ fill: '#6B7280', fontSize: 11 }} tickLine={false} axisLine={false} interval={numDays === 7 ? 0 : numDays === 90 ? 9 : 6} />
+              <YAxis tick={{ fill: '#6B7280', fontSize: 11 }} tickLine={false} axisLine={false} />
+              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(147,51,234,0.08)' }} />
+              <Bar dataKey="mins" radius={[2, 2, 0, 0]}>
+                {realChartData.map((entry, i) => (
+                  <Cell key={i} fill={entry.mins === maxMins && maxMins > 0 ? '#9333EA' : '#2e2832'} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </div>
 
-      {/* Skill Breakdown + Milestones */}
+      {/* Real Skill Breakdown + Real Milestones */}
       <div className="grid grid-cols-2 gap-6">
-        {/* Skill Breakdown */}
         <div className="border border-border rounded-lg p-6 bg-surface-low">
           <h2 className="text-base font-semibold text-text-primary mb-5">Skill Breakdown</h2>
-          <div className="space-y-4">
-            {skills.map((skill) => (
-              <div key={skill.label}>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full" style={{backgroundColor: skill.color}} />
-                    <span className="text-sm text-text-secondary">{skill.label}</span>
+          {skillData.length === 0 ? (
+            <p className="text-text-muted text-sm">No data yet.</p>
+          ) : (
+            <div className="space-y-4">
+              {skillData.map(skill => (
+                <div key={skill.id}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: skill.color }} />
+                      <span className="text-sm text-text-secondary">{skill.label}</span>
+                    </div>
+                    <span className="text-sm font-medium text-text-muted">{skill.hours}h</span>
                   </div>
-                  <span className="text-sm font-medium text-text-muted">{skill.hours}h</span>
+                  <div className="w-full h-1.5 bg-border rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${(skill.mins / maxSkillMins) * 100}%`, backgroundColor: skill.color }} />
+                  </div>
                 </div>
-                <div className="w-full h-1.5 bg-border rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{width:`${skill.pct}%`, backgroundColor: skill.color}}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Milestones + Deep Insight */}
         <div className="space-y-4">
           <div className="border border-border rounded-lg p-6 bg-surface-low">
             <h2 className="text-base font-semibold text-text-primary mb-4">Milestones</h2>
             <div className="space-y-3">
-              {milestones.map((m) => (
+              {milestones.map(m => (
                 <div key={m.title} className="flex items-start gap-4 p-4 border border-border rounded-lg hover:bg-surface-high transition-colors">
                   <div className="w-9 h-9 bg-surface-high rounded-lg flex items-center justify-center flex-shrink-0 text-base">
                     {m.icon}
@@ -180,16 +322,22 @@ export default function ProgressTracker() {
             </div>
           </div>
 
-          {/* Deep Insight card */}
           <div className="border border-primary/20 rounded-lg p-5 bg-primary/5">
             <div className="flex items-center gap-2 mb-2">
-              <span className="material-symbols-outlined text-primary" style={{fontSize:'16px'}}>lightbulb</span>
+              <span className="material-symbols-outlined text-primary" style={{ fontSize: '16px' }}>lightbulb</span>
               <p className="text-[10px] font-bold uppercase tracking-widest text-primary">Deep Insight</p>
             </div>
-            <p className="text-sm text-text-secondary leading-relaxed">
-              Your most productive window is between <span className="text-text-primary font-medium">9:00 PM and 11:30 PM</span>. 
-              You complete 24% more tasks during this period.
-            </p>
+            {topHourLabel ? (
+              <p className="text-sm text-text-secondary leading-relaxed">
+                You log most entries around{' '}
+                <span className="text-text-primary font-medium">{topHourLabel}</span>.
+                That's your peak focus window — protect it. 🔥
+              </p>
+            ) : (
+              <p className="text-sm text-text-secondary">
+                Log more entries and we'll find your peak productive hours!
+              </p>
+            )}
           </div>
         </div>
       </div>
