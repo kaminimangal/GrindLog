@@ -20,6 +20,10 @@ export default function History() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [dateRange, setDateRange] = useState('all')
+  const [editingEntry, setEditingEntry] = useState(null)
+  const [editNote, setEditNote] = useState('')
+  const [editMinutes, setEditMinutes] = useState('')
+  const [editCat, setEditCat] = useState('')
 
   useEffect(() => { if (user) loadHistory() }, [user])
 
@@ -34,6 +38,20 @@ export default function History() {
     if (!confirmed) return
     await supabase.from('entries').delete().eq('id', id)
     setAllEntries(allEntries.filter(e => e.id !== id))
+  }
+
+  async function handleEdit(e) {
+    e.preventDefault()
+    if (!editNote.trim()) return
+    const { data } = await supabase
+      .from('entries')
+      .update({ note: editNote.trim(), minutes: parseInt(editMinutes) || null, category_id: editCat })
+      .eq('id', editingEntry.id)
+      .select().single()
+    if (data) {
+      setAllEntries(allEntries.map(e => e.id === data.id ? data : e))
+      setEditingEntry(null)
+    }
   }
 
   // Calculate start date based on selected range
@@ -242,7 +260,7 @@ export default function History() {
                     const cat = getCategoryById(entry.category_id)
                     const time = new Date(entry.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
                     return (
-                      <div key={entry.id} className="flex group items-start gap-4 p-4 border-y border-r border-border rounded-r-lg bg-surface-low hover:bg-surface-high transition-colors" style={{ borderLeft: "3px solid " + cat.color }}>
+                      <div key={entry.id} className="flex group items-start gap-2 md:gap-4 p-3 md:p-4 border-y border-r border-border rounded-r-lg bg-surface-low hover:bg-surface-high transition-colors" style={{ borderLeft: "3px solid " + cat.color }}>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-3 mb-1">
                             <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: cat.color }}>{cat.short}</span>
@@ -256,10 +274,16 @@ export default function History() {
                           </div>
                           <p className="text-sm text-text-secondary leading-relaxed">{entry.note}</p>
                         </div>
-                        {entry.minutes && <span className="flex items-center gap-1 text-xs text-text-muted flex-shrink-0 mt-0.5"><span className="material-symbols-outlined" style={{ fontSize: '13px' }}>schedule</span>{entry.minutes}m</span>}
+                        {entry.minutes && <span className="hidden md:flex items-center gap-1 text-xs text-text-muted flex-shrink-0 mt-0.5"><span className="material-symbols-outlined" style={{ fontSize: '13px' }}>schedule</span>{entry.minutes}m</span>}
+                        <button
+                          onClick={() => { setEditingEntry(entry); setEditNote(entry.note); setEditMinutes(entry.minutes || ''); setEditCat(entry.category_id) }}
+                          className="opacity-100 md:opacity-0 group-hover:opacity-100 text-text-muted hover:text-primary transition-all flex-shrink-0"
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>edit</span>
+                        </button>
                         <button
                           onClick={() => handleDelete(entry.id)}
-                          className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-red-400 transition-all flex-shrink-0"
+                          className="opacity-100 md:opacity-0 group-hover:opacity-100 text-text-muted hover:text-red-400 transition-all flex-shrink-0"
                         >
                           <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>delete</span>
                         </button>
@@ -272,6 +296,46 @@ export default function History() {
           })}
         </div>
       )}
-    </div>
+      {
+        editingEntry && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+            onClick={() => setEditingEntry(null)}>
+            <div className="bg-surface-low border border-border rounded-xl p-6 w-full max-w-md"
+              onClick={e => e.stopPropagation()}>
+              <h3 className="text-base font-semibold text-text-primary mb-4">Edit Entry</h3>
+              <form onSubmit={handleEdit} className="space-y-3">
+                <div>
+                  <label className="text-xs text-text-muted uppercase tracking-widest mb-2 block">Category</label>
+                  <select value={editCat} onChange={e => setEditCat(e.target.value)}
+                    className="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-primary">
+                    {CATEGORIES.map(cat => <option key={cat.id} value={cat.id}>{cat.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-text-muted uppercase tracking-widest mb-2 block">Note</label>
+                  <textarea value={editNote} onChange={e => setEditNote(e.target.value)}
+                    rows={4} className="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-primary resize-none" />
+                </div>
+                <div>
+                  <label className="text-xs text-text-muted uppercase tracking-widest mb-2 block">Minutes</label>
+                  <input type="number" value={editMinutes} onChange={e => setEditMinutes(e.target.value)}
+                    className="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-primary" />
+                </div>
+                <div className="flex gap-3 mt-4">
+                  <button type="button" onClick={() => setEditingEntry(null)}
+                    className="flex-1 border border-border text-text-muted py-2 rounded text-sm hover:bg-surface-high transition-colors">
+                    Cancel
+                  </button>
+                  <button type="submit"
+                    className="flex-1 bg-primary text-white py-2 rounded text-sm font-semibold hover:bg-primary/90 transition-colors">
+                    Save Changes
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )
+      }
+    </div >
   )
 }

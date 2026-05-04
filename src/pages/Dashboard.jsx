@@ -14,7 +14,7 @@ function StatCard({ label, value, unit }) {
   )
 }
 
-function EntryCard({ entry, onDelete, onStatusChange }) {
+function EntryCard({ entry, onDelete, onStatusChange, onEdit }) {
   const cat = getCategoryById(entry.category_id)
   const time = new Date(entry.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
   const isComplete = entry.status === 'complete'
@@ -51,7 +51,16 @@ function EntryCard({ entry, onDelete, onStatusChange }) {
               {isComplete ? 'check_circle' : 'radio_button_unchecked'}
             </span>
           </button>
-          <button onClick={() => onDelete(entry.id)} className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-red-400 transition-all">
+          <button
+            onClick={() => onEdit(entry)}
+            className="opacity-100 md:opacity-0 group-hover:opacity-100 text-text-muted hover:text-primary transition-all"
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>edit</span>
+          </button>
+          <button
+            onClick={() => onDelete(entry.id)}
+            className="opacity-100 md:opacity-0 group-hover:opacity-100 text-text-muted hover:text-red-400 transition-all"
+          >
             <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>delete</span>
           </button>
         </div>
@@ -74,6 +83,10 @@ export default function Dashboard() {
   const maxChars = 300
   const [successMsg, setSuccessMsg] = useState('')
   const [streak, setStreak] = useState(0)
+  const [editingEntry, setEditingEntry] = useState(null)
+  const [editNote, setEditNote] = useState('')
+  const [editMinutes, setEditMinutes] = useState('')
+  const [editCat, setEditCat] = useState('')
 
   const today = new Date().toISOString().slice(0, 10)
   const displayName = user?.user_metadata?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'there'
@@ -174,6 +187,25 @@ export default function Dashboard() {
     ))
   }
 
+  async function handleEdit(e) {
+    e.preventDefault()
+    if (!editNote.trim()) return
+    const { data } = await supabase
+      .from('entries')
+      .update({
+        note: editNote.trim(),
+        minutes: parseInt(editMinutes) || null,
+        category_id: editCat
+      })
+      .eq('id', editingEntry.id)
+      .select()
+      .single()
+    if (data) {
+      setEntries(entries.map(e => e.id === data.id ? data : e))
+      setEditingEntry(null)
+    }
+  }
+
   const totalMins = entries.reduce((s, e) => s + (e.minutes || 0), 0)
   const catCounts = {}
   entries.forEach(e => { catCounts[e.category_id] = (catCounts[e.category_id] || 0) + (e.minutes || 0) })
@@ -265,7 +297,7 @@ export default function Dashboard() {
                 <span className="material-symbols-outlined block mx-auto mb-2" style={{ fontSize: '32px' }}>edit_note</span>
                 No entries yet today. Log something above!
               </div>
-            ) : entries.map(entry => <EntryCard key={entry.id} entry={entry} onDelete={handleDelete} onStatusChange={handleStatusChange} />)}
+            ) : entries.map(entry => <EntryCard key={entry.id} entry={entry} onDelete={handleDelete} onStatusChange={handleStatusChange} onEdit={(entry) => { setEditingEntry(entry); setEditNote(entry.note); setEditMinutes(entry.minutes || ''); setEditCat(entry.category_id) }} />)}
           </div>
         </div>
       </div>
@@ -292,6 +324,44 @@ export default function Dashboard() {
                 </div>
               )
             })}
+          </div>
+        </div>
+      )}
+      {editingEntry && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+          onClick={() => setEditingEntry(null)}>
+          <div className="bg-surface-low border border-border rounded-xl p-6 w-full max-w-md"
+            onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-semibold text-text-primary mb-4">Edit Entry</h3>
+            <form onSubmit={handleEdit} className="space-y-3">
+              <div>
+                <label className="text-xs text-text-muted uppercase tracking-widest mb-2 block">Category</label>
+                <select value={editCat} onChange={e => setEditCat(e.target.value)}
+                  className="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-primary">
+                  {CATEGORIES.map(cat => <option key={cat.id} value={cat.id}>{cat.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-text-muted uppercase tracking-widest mb-2 block">Note</label>
+                <textarea value={editNote} onChange={e => setEditNote(e.target.value)}
+                  rows={4} className="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-primary resize-none" />
+              </div>
+              <div>
+                <label className="text-xs text-text-muted uppercase tracking-widest mb-2 block">Minutes</label>
+                <input type="number" value={editMinutes} onChange={e => setEditMinutes(e.target.value)}
+                  className="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-primary" />
+              </div>
+              <div className="flex gap-3 mt-4">
+                <button type="button" onClick={() => setEditingEntry(null)}
+                  className="flex-1 border border-border text-text-muted py-2 rounded text-sm hover:bg-surface-high transition-colors">
+                  Cancel
+                </button>
+                <button type="submit"
+                  className="flex-1 bg-primary text-white py-2 rounded text-sm font-semibold hover:bg-primary/90 transition-colors">
+                  Save Changes
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
