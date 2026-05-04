@@ -8,9 +8,11 @@ import WhereILeftOff from './pages/WhereILeftOff'
 import History from './pages/History'
 import ProgressTracker from './pages/ProgressTracker'
 import Goals from './pages/Goals'
+import { useState } from 'react'
 
 function AppRoutes() {
   const { user, loading } = useAuth()
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   if (loading) return (
     <div className="min-h-screen bg-bg flex items-center justify-center">
@@ -22,8 +24,15 @@ function AppRoutes() {
 
   return (
     <>
-      <Sidebar />
-      <TopBar />
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <TopBar onMenuClick={() => setSidebarOpen(prev => !prev)} />
+      {/* Dark overlay on mobile when sidebar open */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/left-off" element={<WhereILeftOff />} />

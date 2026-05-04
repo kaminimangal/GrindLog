@@ -11,7 +11,7 @@ const navItems = [
   { to: '/goals', icon: 'flag', label: 'Goals' },
 ]
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen, onClose }) {
   const { user, signOut } = useAuth()
   const displayName = user?.user_metadata?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'You'
   const [entryCount, setEntryCount] = useState(0)
@@ -24,8 +24,8 @@ export default function Sidebar() {
   }, [user])
 
   return (
-    <aside className="fixed left-0 top-0 h-full w-[240px] border-r border-border bg-bg flex flex-col py-6 z-50">
-      <div className="px-6 mb-8">
+    <aside className={`fixed left-0 top-0 h-full w-[240px] border-r border-border bg-bg flex flex-col py-6 z-50 transition-transform duration-300 ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
+      <div className="px-6 mb-8 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
             <span className="material-symbols-outlined text-white" style={{ fontSize: '16px' }}>bolt</span>
@@ -34,12 +34,16 @@ export default function Sidebar() {
             <p className="text-white font-semibold text-sm tracking-wider uppercase">GrindLog</p>
             <p className="text-text-muted text-[10px] uppercase tracking-widest">Deep Focus Tracking</p>
           </div>
+          <button onClick={onClose} className="md:hidden text-text-muted hover:text-white">
+            <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>close</span>
+          </button>
         </div>
       </div>
 
       <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto">
         {navItems.map(item => (
           <NavLink key={item.to} to={item.to} end={item.to === '/'}
+            onClick={onClose}
             className={({ isActive }) => "flex items-center gap-3 px-3 py-2 rounded text-sm transition-all duration-150 " + (isActive ? 'bg-[#1F2937]/60 text-white border-l-2 border-primary pl-[10px]' : 'text-text-muted hover:bg-[#1F2937]/40 hover:text-text-secondary')}>
             <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>{item.icon}</span>
             {item.label}

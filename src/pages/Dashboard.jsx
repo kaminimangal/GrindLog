@@ -181,8 +181,8 @@ export default function Dashboard() {
   const totalForDist = topCats.reduce((s, [, m]) => s + m, 0)
 
   return (
-    <div className="ml-[240px] mt-14 p-8">
-      <div className="flex items-start justify-between mb-8">
+    <div className="ml-0 md:ml-[240px] mt-14 p-4 md:p-8">
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between mb-8 gap-4">
         <div>
           <p className="text-primary text-sm font-medium mb-1">{dateLabel}</p>
           <h1 className="text-3xl font-semibold text-text-primary">{greeting}, {displayName}</h1>
@@ -194,7 +194,7 @@ export default function Dashboard() {
                 : "You're on fire today! 🔥 This is how careers change."}
           </p>
         </div>
-        <div className="flex gap-4">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4 md:gap-4">
           <StatCard label="Logs today" value={entries.length} />
           <StatCard label="Minutes studied" value={totalMins || '—'} unit={totalMins ? 'm' : ''} />
           <StatCard label="Days tracked" value={totalDays} />
@@ -202,7 +202,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="border border-border rounded-lg p-6 bg-surface-low">
           <h2 className="text-base font-semibold text-text-primary mb-5">Quick Log</h2>
           <form onSubmit={handleLog} className="space-y-4">

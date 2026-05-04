@@ -87,8 +87,8 @@ export default function History() {
   const activeCategories = CATEGORIES.filter(c => activeCatIds.includes(c.id))
 
   return (
-    <div className="ml-[240px] mt-14 p-8 max-w-[1200px]">
-      <div className="flex items-center justify-between mb-6">
+    <div className="ml-0 md:ml-[240px] mt-14 p-4 md:p-8 ">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-text-primary">History</h1>
           <p className="text-text-muted text-sm mt-1">Everything you've logged, in order.</p>
@@ -122,7 +122,7 @@ export default function History() {
       </div>
       {/* Stats row */}
       {allEntries.length > 0 && (
-        <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div className="border border-border rounded-lg px-4 py-3 bg-surface-low">
             <p className="text-text-muted text-[10px] uppercase tracking-widest mb-1">Total Hours</p>
             <p className="text-text-primary text-xl font-semibold">{totalHours}<span className="text-text-muted text-xs font-normal ml-1">h</span></p>
@@ -135,7 +135,7 @@ export default function History() {
 
           <div className="border border-border rounded-lg px-4 py-3 bg-surface-low">
             <p className="text-text-muted text-[10px] uppercase tracking-widest mb-1">Top Category</p>
-            <p className="text-xl font-semibold" style={{ color: topCat?.color || '#eadfee' }}>
+            <p className="text-sm md:text-xl font-semibold truncate" style={{ color: topCat?.color || '#eadfee' }}>
               {topCat?.label || '—'}
             </p>
           </div>
@@ -169,7 +169,7 @@ export default function History() {
       </div>
 
       {/* Date range filter */}
-      <div className="flex gap-2 mb-3 flex-wrap">
+      <div className="flex gap-2 mb-3 flex-wrap items-center">
         {[
           { id: 'all', label: 'All time' },
           { id: '7days', label: 'Last 7 days' },

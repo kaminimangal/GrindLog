@@ -77,23 +77,23 @@ export default function Goals() {
   const toggle = (id) => setTasks(t => t.map(x => x.id === id ? { ...x, done: !x.done } : x))
 
   return (
-    <div className="ml-[240px] mt-14 p-8 max-w-[1200px]">
+    <div className="ml-0 md:ml-[240px] mt-14 p-4 md:p-8 ">
       {/* Header */}
-      <div className="flex items-start justify-between mb-8">
+      <div className="flex items-start justify-between mb-8 gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-text-primary">Goal Strategy</h1>
           <p className="text-text-muted text-sm mt-1">Define, track, and execute your high-level technical objectives.</p>
         </div>
         <button
           onClick={() => setShowNewGoal(true)}
-          className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded text-sm font-semibold transition-all active:scale-[0.99]"
+          className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-3 py-2 rounded text-sm font-semibold transition-all active:scale-[0.99] flex-shrink-0"
         >
           <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>add</span>
           New Goal
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         {/* Left 2/3 column */}
         <div className="col-span-2 space-y-8">
 
@@ -103,7 +103,7 @@ export default function Goals() {
               <span className="material-symbols-outlined text-primary" style={{ fontSize: '20px' }}>bolt</span>
               <h2 className="text-lg font-semibold text-text-primary">Active Objectives</h2>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {goals.map(goal => (
                 <div
                   key={goal.id}

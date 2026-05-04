@@ -116,7 +116,7 @@ export default function WhereILeftOff() {
   const catCount = activeCatIds.length
 
   return (
-    <div className="ml-[240px] mt-14 p-8 max-w-[1200px]">
+    <div className="ml-0 md:ml-[240px] mt-14 p-4 md:p-8 ">
       {/* Header with count summary */}
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-text-primary mb-1">
@@ -175,7 +175,7 @@ export default function WhereILeftOff() {
           No active entries in this category.
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {filtered.map(entry => (
             <LeftOffCard
               key={entry.id}

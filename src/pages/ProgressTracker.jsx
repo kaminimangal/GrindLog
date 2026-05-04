@@ -155,13 +155,13 @@ export default function ProgressTracker() {
     : null
 
   if (loading) return (
-    <div className="ml-[240px] mt-14 p-8 text-text-muted text-sm">
+    <div className="ml-0 md:ml-[240px] mt-14 p-4 md:p-8 text-text-muted text-sm">
       Loading your stats...
     </div>
   )
 
   if (allEntries.length === 0) return (
-    <div className="ml-[240px] mt-14 p-8 max-w-[1200px]">
+    <div className="ml-0 md:ml-[240px] mt-14 p-4 md:p-8 ">
       <div className="border border-border rounded-lg p-16 text-center">
         <span className="material-symbols-outlined block mx-auto mb-3 text-text-muted" style={{ fontSize: '40px' }}>monitoring</span>
         <p className="text-text-primary font-medium mb-1">No data yet</p>
@@ -171,7 +171,7 @@ export default function ProgressTracker() {
   )
 
   return (
-    <div className="ml-[240px] mt-14 p-8 max-w-[1200px]">
+    <div className="ml-0 md:ml-[240px] mt-14 p-4 md:p-8 ">
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
@@ -181,7 +181,7 @@ export default function ProgressTracker() {
       </div>
 
       {/* Real Stat cards */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div className="border border-border rounded-lg p-5 bg-surface-low">
           <div className="flex items-center justify-between mb-3">
             <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted">Total Hours</p>
@@ -196,7 +196,7 @@ export default function ProgressTracker() {
             <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted">Top Category</p>
             <span className="material-symbols-outlined text-text-muted" style={{ fontSize: '16px' }}>code</span>
           </div>
-          <p className="text-xl font-semibold" style={{ color: topCat?.color || '#eadfee' }}>
+          <p className="text-sm md:text-xl font-semibold truncate" style={{ color: topCat?.color || '#eadfee' }}>
             {topCat?.label || '—'}
           </p>
           <p className="text-xs text-text-muted mt-1">
@@ -231,10 +231,9 @@ export default function ProgressTracker() {
 
       {/* Real Chart */}
       <div className="border border-border rounded-lg p-6 bg-surface-low mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-text-primary">Focus Distribution - Last {numDays} Days</h2>
-          {/* Date range filter */}
-          <div className="flex gap-2 mb-3 flex-wrap">
+        <div className="flex flex-col gap-3 mb-4">
+          <h2 className="text-base font-semibold text-text-primary">Focus Distribution — Last {numDays} Days</h2>
+          <div className="flex gap-2 flex-wrap">
             {[
               { id: '7days', label: 'Last 7 days' },
               { id: '30days', label: 'Last 30 days' },
@@ -252,7 +251,7 @@ export default function ProgressTracker() {
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-2 text-xs text-text-muted">
+          <div className="hidden md:flex items-center gap-2 text-xs text-text-muted">
             <span className="w-2 h-2 rounded-full bg-primary inline-block" />
             Minutes per day
           </div>
@@ -278,7 +277,7 @@ export default function ProgressTracker() {
       </div>
 
       {/* Real Skill Breakdown + Real Milestones */}
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="border border-border rounded-lg p-6 bg-surface-low">
           <h2 className="text-base font-semibold text-text-primary mb-5">Skill Breakdown</h2>
           {skillData.length === 0 ? (
