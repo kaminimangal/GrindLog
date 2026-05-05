@@ -9,6 +9,7 @@ import History from './pages/History'
 import ProgressTracker from './pages/ProgressTracker'
 import Goals from './pages/Goals'
 import { useState } from 'react'
+import AIMotivation from './pages/AIMotivation'
 
 function AppRoutes() {
   const { user, loading } = useAuth()
@@ -40,6 +41,7 @@ function AppRoutes() {
         <Route path="/progress" element={<ProgressTracker />} />
         <Route path="/goals" element={<Goals />} />
         <Route path="*" element={<Navigate to="/" />} />
+        <Route path="/ai" element={<AIMotivation />} />
       </Routes>
     </>
   )

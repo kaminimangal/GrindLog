@@ -9,6 +9,7 @@ const navItems = [
   { to: '/history', icon: 'history', label: 'History' },
   { to: '/progress', icon: 'monitoring', label: 'Progress Tracker' },
   { to: '/goals', icon: 'flag', label: 'Goals' },
+  { to: '/ai', icon: 'auto_awesome', label: 'AI Motivation' },
 ]
 
 export default function Sidebar({ isOpen, onClose }) {
