@@ -1,133 +1,131 @@
 // src/components/HeatmapCalendar.jsx
 export default function HeatmapCalendar({ entries }) {
-    // Build a map of date → count
     const countMap = {}
     entries.forEach(e => {
         countMap[e.date] = (countMap[e.date] || 0) + 1
     })
 
-    // Generate last 364 days (52 weeks)
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-
-    // Find the most recent Sunday to align the grid
-    const startDate = new Date(today)
-    startDate.setDate(today.getDate() - 363)
-    // Align to Monday
-    const dayOfWeek = startDate.getDay()
-    const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1
-    startDate.setDate(startDate.getDate() - diffToMonday)
-
-    const days = []
-    const d = new Date(startDate)
-    while (d <= today) {
-        const dateStr = d.toISOString().slice(0, 10)
-        days.push({ date: dateStr, count: countMap[dateStr] || 0 })
-        d.setDate(d.getDate() + 1)
-    }
-
-    // Group into weeks (columns of 7)
-    const weeks = []
-    for (let i = 0; i < days.length; i += 7) {
-        weeks.push(days.slice(i, i + 7))
-    }
-
-    // Color based on count
     function getColor(count) {
-        if (count === 0) return '#1F2937'
-        if (count === 1) return '#6b21a8'
-        if (count === 2) return '#7e22ce'
+        if (count === 0) return '#1a1f2e'
+        if (count === 1) return '#5b21b6'
+        if (count === 2) return '#7c3aed'
         if (count <= 4) return '#9333ea'
         return '#c084fc'
     }
 
-    // Month labels — find first week of each month
-    const monthLabels = []
-    weeks.forEach((week, i) => {
-        const firstDay = week[0]
-        if (!firstDay) return
-        const date = new Date(firstDay.date + 'T00:00:00')
-        if (date.getDate() <= 7) {
-            monthLabels.push({
-                index: i,
-                label: date.toLocaleDateString('en-US', { month: 'short' }),
-            })
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const endDate = new Date(today)
+    const dayOfWeek = endDate.getDay()
+    endDate.setDate(endDate.getDate() + (dayOfWeek === 0 ? 0 : 6 - dayOfWeek))
+
+    const startDate = new Date(endDate)
+    startDate.setDate(endDate.getDate() - 52 * 7 + 1)
+
+    const weeks = []
+    let currentWeek = []
+    const d = new Date(startDate)
+
+    while (d <= endDate) {
+        const dateStr = d.toISOString().slice(0, 10)
+        const isFuture = d > today
+        currentWeek.push({ date: dateStr, count: isFuture ? -1 : (countMap[dateStr] || 0), isFuture })
+        if (currentWeek.length === 7) {
+            weeks.push(currentWeek)
+            currentWeek = []
         }
+        d.setDate(d.getDate() + 1)
+    }
+    if (currentWeek.length > 0) weeks.push(currentWeek)
+
+    // ONE label per month — placed at the week containing the 1st of that month
+    const seenMonths = new Set()
+    const monthLabels = new Array(weeks.length).fill('')
+
+    weeks.forEach((week, wi) => {
+        week.forEach(day => {
+            if (day.isFuture) return
+            const date = new Date(day.date + 'T00:00:00')
+            const key = `${date.getFullYear()}-${date.getMonth()}`
+            if (date.getDate() <= 7 && !seenMonths.has(key)) {
+                seenMonths.add(key)
+                monthLabels[wi] = date.toLocaleDateString('en-US', { month: 'short' })
+            }
+        })
     })
 
-    const dayLabels = ['Mon', '', 'Wed', '', 'Fri', '', '']
-    const maxCount = Math.max(...Object.values(countMap), 0)
-    const totalDays = Object.keys(countMap).length
+    const dayLabels = ['', 'Mon', '', 'Wed', '', 'Fri', '']
+    const activeDays = Object.keys(countMap).length
+    const totalLogs = Object.values(countMap).reduce((a, b) => a + b, 0)
+    const CELL = 13
+    const GAP = 3
 
     return (
-        <div>
-            {/* Month labels */}
-            <div className="flex mb-1 pl-8">
-                {weeks.map((_, i) => {
-                    const label = monthLabels.find(m => m.index === i)
-                    return (
-                        <div
-                            key={i}
-                            className="text-[10px] text-text-muted"
-                            style={{ width: 14, marginRight: 2, flexShrink: 0 }}
-                        >
-                            {label ? label.label : ''}
-                        </div>
-                    )
-                })}
-            </div>
+        <div className="w-full overflow-x-auto">
+            <div style={{ minWidth: 580 }}>
 
-            <div className="flex gap-1">
-                {/* Day labels */}
-                <div className="flex flex-col gap-0.5 mr-1">
-                    {dayLabels.map((label, i) => (
+                <div className="flex mb-1" style={{ paddingLeft: 32 }}>
+                    {weeks.map((_, wi) => (
                         <div
-                            key={i}
-                            className="text-[10px] text-text-muted flex items-center"
-                            style={{ height: 12, lineHeight: '12px' }}
+                            key={wi}
+                            className="text-[10px] text-text-muted flex-shrink-0"
+                            style={{ width: CELL + GAP }}
                         >
-                            {label}
+                            {monthLabels[wi]}
                         </div>
                     ))}
                 </div>
 
-                {/* Grid */}
-                <div className="flex gap-0.5 overflow-x-auto">
-                    {weeks.map((week, wi) => (
-                        <div key={wi} className="flex flex-col gap-0.5">
-                            {week.map((day, di) => (
-                                <div
-                                    key={di}
-                                    title={`${day.date}: ${day.count} log${day.count !== 1 ? 's' : ''}`}
-                                    className="rounded-sm cursor-default transition-opacity hover:opacity-80"
-                                    style={{
-                                        width: 12,
-                                        height: 12,
-                                        backgroundColor: getColor(day.count),
-                                        flexShrink: 0,
-                                    }}
-                                />
-                            ))}
-                        </div>
-                    ))}
-                </div>
-            </div>
+                <div className="flex">
+                    <div className="flex flex-col flex-shrink-0" style={{ gap: GAP, marginRight: 6 }}>
+                        {dayLabels.map((label, i) => (
+                            <div
+                                key={i}
+                                className="text-[10px] text-text-muted flex items-center justify-end"
+                                style={{ height: CELL, width: 26 }}
+                            >
+                                {label}
+                            </div>
+                        ))}
+                    </div>
 
-            {/* Legend */}
-            <div className="flex items-center justify-between mt-3">
-                <p className="text-[10px] text-text-muted">
-                    {totalDays} active days · {Object.values(countMap).reduce((a, b) => a + b, 0)} total logs
-                </p>
-                <div className="flex items-center gap-1">
-                    <span className="text-[10px] text-text-muted">Less</span>
-                    {[0, 1, 2, 3, 5].map(n => (
-                        <div
-                            key={n}
-                            className="rounded-sm"
-                            style={{ width: 12, height: 12, backgroundColor: getColor(n) }}
-                        />
-                    ))}
-                    <span className="text-[10px] text-text-muted">More</span>
+                    <div className="flex" style={{ gap: GAP }}>
+                        {weeks.map((week, wi) => (
+                            <div key={wi} className="flex flex-col flex-shrink-0" style={{ gap: GAP }}>
+                                {week.map((day, di) => (
+                                    <div
+                                        key={di}
+                                        title={day.isFuture ? '' : `${day.date}: ${day.count} log${day.count !== 1 ? 's' : ''}`}
+                                        className="rounded-sm cursor-default"
+                                        style={{
+                                            width: CELL,
+                                            height: CELL,
+                                            backgroundColor: day.isFuture ? 'transparent' : getColor(day.count),
+                                        }}
+                                    />
+                                ))}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
+                    <p className="text-[11px] text-text-muted">
+                        <span className="text-text-secondary font-medium">{activeDays}</span> active days ·{' '}
+                        <span className="text-text-secondary font-medium">{totalLogs}</span> total logs
+                    </p>
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] text-text-muted">Less</span>
+                        {[0, 1, 2, 3, 5].map(n => (
+                            <div
+                                key={n}
+                                className="rounded-sm"
+                                style={{ width: CELL, height: CELL, backgroundColor: getColor(n) }}
+                            />
+                        ))}
+                        <span className="text-[11px] text-text-muted">More</span>
+                    </div>
                 </div>
             </div>
         </div>

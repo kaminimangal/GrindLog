@@ -24,14 +24,12 @@ export default function OnboardingModal({ onComplete }) {
         if (!note.trim()) return
         setSaving(true)
 
-        // Save display name if changed
         if (displayName.trim()) {
             await supabase.auth.updateUser({
                 data: { full_name: displayName.trim() }
             })
         }
 
-        // Save first log entry
         const today = new Date().toISOString().slice(0, 10)
         await supabase.from('entries').insert({
             user_id: user.id,
@@ -56,20 +54,17 @@ export default function OnboardingModal({ onComplete }) {
                         <div
                             key={i}
                             className="flex-1 h-1 transition-all duration-300"
-                            style={{
-                                backgroundColor: i < step ? '#9333EA' : '#1F2937'
-                            }}
+                            style={{ backgroundColor: i < step ? '#9333EA' : '#1F2937' }}
                         />
                     ))}
                 </div>
 
                 <div className="p-7">
-                    {/* Step indicator */}
                     <p className="text-xs text-text-muted uppercase tracking-widest mb-6">
                         Step {step} of {steps.length} — {steps[step - 1]}
                     </p>
 
-                    {/* ── Step 1: Welcome ── */}
+                    {/* Step 1: Welcome */}
                     {step === 1 && (
                         <div>
                             <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center mb-5">
@@ -100,7 +95,7 @@ export default function OnboardingModal({ onComplete }) {
                         </div>
                     )}
 
-                    {/* ── Step 2: Pick categories ── */}
+                    {/* Step 2: Pick categories */}
                     {step === 2 && (
                         <div>
                             <h2 className="text-xl font-semibold text-text-primary mb-2">
@@ -141,7 +136,7 @@ export default function OnboardingModal({ onComplete }) {
                         </div>
                     )}
 
-                    {/* ── Step 3: First log ── */}
+                    {/* Step 3: First log */}
                     {step === 3 && (
                         <div>
                             <h2 className="text-xl font-semibold text-text-primary mb-2">
@@ -159,9 +154,7 @@ export default function OnboardingModal({ onComplete }) {
                                     onChange={e => setSelectedCats([e.target.value])}
                                     className="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-primary"
                                 >
-                                    {CATEGORIES.filter(c =>
-                                        selectedCats.includes(c.id)
-                                    ).map(cat => (
+                                    {CATEGORIES.filter(c => selectedCats.includes(c.id)).map(cat => (
                                         <option key={cat.id} value={cat.id}>{cat.label}</option>
                                     ))}
                                 </select>
@@ -182,7 +175,7 @@ export default function OnboardingModal({ onComplete }) {
                         </div>
                     )}
 
-                    {/* Navigation buttons */}
+                    {/* Navigation */}
                     <div className="flex gap-3 mt-6">
                         {step > 1 && (
                             <button
