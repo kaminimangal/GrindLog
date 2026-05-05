@@ -8,12 +8,16 @@ import WhereILeftOff from './pages/WhereILeftOff'
 import History from './pages/History'
 import ProgressTracker from './pages/ProgressTracker'
 import Goals from './pages/Goals'
-import { useState } from 'react'
 import AIMotivation from './pages/AIMotivation'
+import OnboardingModal from './components/OnboardingModal'
+import { useState, useEffect } from 'react'
+import { supabase } from './lib/supabase'
+import Settings from './pages/Settings'
 
 function AppRoutes() {
   const { user, loading } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [showOnboarding, setShowOnboarding] = useState(false)
 
   if (loading) return (
     <div className="min-h-screen bg-bg flex items-center justify-center">
@@ -21,10 +25,25 @@ function AppRoutes() {
     </div>
   )
 
+  useEffect(() => {
+    if (!user) return
+    // Check if this is a new user (zero entries)
+    supabase
+      .from('entries')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .then(({ count }) => {
+        if (count === 0) setShowOnboarding(true)
+      })
+  }, [user])
+
   if (!user) return <AuthPage />
 
   return (
     <>
+      {showOnboarding && (
+        <OnboardingModal onComplete={() => setShowOnboarding(false)} />
+      )}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <TopBar onMenuClick={() => setSidebarOpen(prev => !prev)} />
       {/* Dark overlay on mobile when sidebar open */}
@@ -42,6 +61,7 @@ function AppRoutes() {
         <Route path="/goals" element={<Goals />} />
         <Route path="*" element={<Navigate to="/" />} />
         <Route path="/ai" element={<AIMotivation />} />
+        <Route path="/settings" element={<Settings />} />
       </Routes>
     </>
   )

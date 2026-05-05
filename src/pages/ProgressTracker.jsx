@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { CATEGORIES, getCategoryById } from '../data'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import HeatmapCalendar from '../components/HeatmapCalendar'
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
@@ -229,6 +230,15 @@ export default function ProgressTracker() {
         </div>
       </div>
 
+
+      <div className="border border-border rounded-lg p-6 bg-surface-low mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-text-primary">Activity Heatmap</h2>
+          <span className="text-xs text-text-muted">Last 12 months</span>
+        </div>
+        <HeatmapCalendar entries={allEntries} />
+      </div>
+
       {/* Real Chart */}
       <div className="border border-border rounded-lg p-6 bg-surface-low mb-6">
         <div className="flex flex-col gap-3 mb-4">
@@ -255,6 +265,7 @@ export default function ProgressTracker() {
             <span className="w-2 h-2 rounded-full bg-primary inline-block" />
             Minutes per day
           </div>
+
         </div>
         {totalMins === 0 ? (
           <p className="text-text-muted text-sm text-center py-8">
