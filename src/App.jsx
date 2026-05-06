@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider, useAuth } from './context/AuthContext'
+import { useAuth } from './context/AuthContext'
 import Sidebar from './components/Sidebar'
 import TopBar from './components/TopBar'
 import AuthPage from './pages/AuthPage'
@@ -15,6 +15,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from './lib/supabase'
 // Add this import at the top of App.jsx
 import { useQueryClient } from '@tanstack/react-query'
+import CategorySets from './pages/CategorySets'
 
 function AppRoutes() {
   const { user, loading } = useAuth()
@@ -147,6 +148,7 @@ function AppRoutes() {
         <Route path="/ai" element={<AIMotivation />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" />} />
+        <Route path="/categories" element={<CategorySets />} />
       </Routes>
     </>
   )
@@ -154,10 +156,10 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
-    </AuthProvider>
+
+    <BrowserRouter>
+      <AppRoutes />
+    </BrowserRouter>
+
   )
 }

@@ -9,6 +9,7 @@ const navItems = [
   { to: '/history', icon: 'history', label: 'History' },
   { to: '/progress', icon: 'monitoring', label: 'Progress Tracker' },
   { to: '/goals', icon: 'flag', label: 'Goals' },
+  { to: '/categories', icon: 'category', label: 'Category Sets' },
   { to: '/ai', icon: 'auto_awesome', label: 'AI Motivation' },
   { to: '/settings', icon: 'settings', label: 'Settings' },
 ]

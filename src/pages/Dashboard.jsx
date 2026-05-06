@@ -6,7 +6,6 @@ import { useAuth } from '../context/AuthContext'
 import EditModal from '../components/EditModal'
 import ConfirmModal from '../components/ConfirmModal'
 import { useStreak } from '../hooks/useStreak'
-const { activeCategories, getCategoryById, isLoading: catsLoading } = useCategories()
 
 // ─────────────────────────────────────────────
 // Sub-components (unchanged)
@@ -23,7 +22,7 @@ function StatCard({ label, value, unit }) {
   )
 }
 
-function EntryCard({ entry, onDelete, onStatusChange, onEdit }) {
+function EntryCard({ entry, onDelete, onStatusChange, onEdit, getCategoryById }) {
   const cat = getCategoryById(entry.category_id)
   const time = new Date(entry.created_at).toLocaleTimeString('en-US', {
     hour: 'numeric',
@@ -113,6 +112,7 @@ export default function Dashboard() {
   const [deleteId, setDeleteId] = useState(null)
   // AFTER — default to the first active category's ID, or empty string while loading:
   const [selectedCat, setSelectedCat] = useState('')
+  const { activeCategories, getCategoryById, isLoading: catsLoading } = useCategories()
 
   // And add this effect directly below to set it once categories load:
   useEffect(() => {
@@ -450,6 +450,7 @@ export default function Dashboard() {
                   onDelete={handleDelete}
                   onStatusChange={handleStatusChange}
                   onEdit={entry => setEditingEntry(entry)}
+                  getCategoryById={getCategoryById}
                 />
               ))
             )}
