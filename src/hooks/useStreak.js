@@ -1,33 +1,23 @@
-// src/hooks/useStreak.js
-import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 
-// refreshKey: pass a counter that increments when you add a new log
-// The hook will re-run its calculation automatically
-export function useStreak(user, refreshKey = 0) {
-    const [streak, setStreak] = useState(0)
-    const [loggedThisWeek, setLoggedThisWeek] = useState([])
-    const [totalEntries, setTotalEntries] = useState(0)
+export function useStreak(user) {
+    const { data } = useQuery({
+        // The queryKey is the cache address for this data.
+        // Including user.id means each user gets their own cache slot.
+        queryKey: ['streak', user?.id],
 
-    useEffect(() => {
-        if (!user) return
-
-        async function compute() {
+        queryFn: async () => {
             const { data } = await supabase
                 .from('entries')
-                .select('date, created_at')
+                .select('date')
                 .eq('user_id', user.id)
 
             if (!data || data.length === 0) {
-                setStreak(0)
-                setTotalEntries(0)
-                setLoggedThisWeek([])
-                return
+                return { streak: 0, loggedThisWeek: [], totalEntries: 0 }
             }
 
-            setTotalEntries(data.length)
-
-            // ── Streak calculation ──
+            // ── Streak calculation (identical logic, just moved inside queryFn) ──
             const uniqueDates = [...new Set(data.map(e => e.date))]
                 .sort((a, b) => b.localeCompare(a))
 
@@ -46,7 +36,6 @@ export function useStreak(user, refreshKey = 0) {
                     break
                 }
             }
-            setStreak(count)
 
             // ── Which days this week had entries (0=Mon, 6=Sun) ──
             const weekStart = new Date()
@@ -62,11 +51,21 @@ export function useStreak(user, refreshKey = 0) {
                 const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
                 if (data.some(e => e.date === dateStr)) logged.push(i)
             }
-            setLoggedThisWeek(logged)
-        }
 
-        compute()
-    }, [user, refreshKey]) // re-runs when refreshKey changes
+            return { streak: count, loggedThisWeek: logged, totalEntries: data.length }
+        },
 
-    return { streak, loggedThisWeek, totalEntries }
+        // Only run this query when we actually have a user.
+        // Without this guard, the queryFn would fire immediately on mount
+        // with user = null and crash on user.id.
+        enabled: !!user,
+
+        // Streak data doesn't change unless the user logs something.
+        // Keep it fresh for 5 minutes — the mutation will invalidate it anyway.
+        staleTime: 1000 * 60 * 5,
+    })
+
+    // Provide safe defaults while the query is loading.
+    // This means components using this hook never need to handle undefined.
+    return data ?? { streak: 0, loggedThisWeek: [], totalEntries: 0 }
 }
