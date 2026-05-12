@@ -1,6 +1,6 @@
 // src/components/EditModal.jsx
 import { useState } from 'react'
-import { CATEGORIES } from '../data'
+import { useCategories } from '../context/CategoryContext'
 
 // Props:
 //   entry   — the entry object being edited
@@ -11,6 +11,7 @@ export default function EditModal({ entry, onSave, onClose }) {
     const [minutes, setMinutes] = useState(entry.minutes || '')
     const [categoryId, setCategoryId] = useState(entry.category_id)
     const [saving, setSaving] = useState(false)
+    const { activeCategories: userCategories } = useCategories()
 
     async function handleSubmit(e) {
         e.preventDefault()
@@ -45,7 +46,7 @@ export default function EditModal({ entry, onSave, onClose }) {
                             onChange={e => setCategoryId(e.target.value)}
                             className="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-primary"
                         >
-                            {CATEGORIES.map(cat => (
+                            {userCategories.map(cat => (
                                 <option key={cat.id} value={cat.id}>{cat.label}</option>
                             ))}
                         </select>

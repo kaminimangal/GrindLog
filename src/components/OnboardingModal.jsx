@@ -2,15 +2,16 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { CATEGORIES } from '../data'
+import { useCategories } from '../context/CategoryContext'
 
 export default function OnboardingModal({ onComplete }) {
     const { user } = useAuth()
+    const { activeCategories: userCategories, isLoading: catsLoading } = useCategories()
     const [step, setStep] = useState(1)
     const [displayName, setDisplayName] = useState(
         user?.user_metadata?.full_name?.split(' ')[0] || ''
     )
-    const [selectedCats, setSelectedCats] = useState(['dsa'])
+    const [selectedCats, setSelectedCats] = useState([])
     const [note, setNote] = useState('')
     const [saving, setSaving] = useState(false)
 
@@ -33,7 +34,7 @@ export default function OnboardingModal({ onComplete }) {
         const today = new Date().toISOString().slice(0, 10)
         await supabase.from('entries').insert({
             user_id: user.id,
-            category_id: selectedCats[0] || 'dsa',
+            category_id: selectedCats[0] || userCategories[0]?.id,
             note: note.trim(),
             date: today,
         })
@@ -105,33 +106,39 @@ export default function OnboardingModal({ onComplete }) {
                                 Pick the areas you want to track. You can change this anytime.
                             </p>
                             <div className="grid grid-cols-2 gap-2">
-                                {CATEGORIES.map(cat => (
-                                    <button
-                                        key={cat.id}
-                                        onClick={() => toggleCat(cat.id)}
-                                        className="flex items-center gap-3 p-3 rounded-lg border text-left transition-all"
-                                        style={{
-                                            borderColor: selectedCats.includes(cat.id) ? cat.color : '#1F2937',
-                                            backgroundColor: selectedCats.includes(cat.id) ? `${cat.color}15` : 'transparent',
-                                        }}
-                                    >
-                                        <div
-                                            className="w-3 h-3 rounded-full flex-shrink-0"
-                                            style={{ backgroundColor: cat.color }}
-                                        />
-                                        <span className="text-xs font-medium text-text-secondary truncate">
-                                            {cat.label}
-                                        </span>
-                                        {selectedCats.includes(cat.id) && (
-                                            <span
-                                                className="material-symbols-outlined ml-auto flex-shrink-0"
-                                                style={{ fontSize: '14px', color: cat.color }}
-                                            >
-                                                check_circle
+                                {catsLoading ? (
+                                    <p className="col-span-2 text-text-muted text-sm py-4 text-center">
+                                        Loading categories...
+                                    </p>
+                                ) : (
+                                    userCategories.map(cat => (
+                                        <button
+                                            key={cat.id}
+                                            onClick={() => toggleCat(cat.id)}
+                                            className="flex items-center gap-3 p-3 rounded-lg border text-left transition-all"
+                                            style={{
+                                                borderColor: selectedCats.includes(cat.id) ? cat.color : '#1F2937',
+                                                backgroundColor: selectedCats.includes(cat.id) ? `${cat.color}15` : 'transparent',
+                                            }}
+                                        >
+                                            <div
+                                                className="w-3 h-3 rounded-full flex-shrink-0"
+                                                style={{ backgroundColor: cat.color }}
+                                            />
+                                            <span className="text-xs font-medium text-text-secondary truncate">
+                                                {cat.label}
                                             </span>
-                                        )}
-                                    </button>
-                                ))}
+                                            {selectedCats.includes(cat.id) && (
+                                                <span
+                                                    className="material-symbols-outlined ml-auto flex-shrink-0"
+                                                    style={{ fontSize: '14px', color: cat.color }}
+                                                >
+                                                    check_circle
+                                                </span>
+                                            )}
+                                        </button>
+                                    ))
+                                )}
                             </div>
                         </div>
                     )}
@@ -150,11 +157,11 @@ export default function OnboardingModal({ onComplete }) {
                                     Category
                                 </label>
                                 <select
-                                    value={selectedCats[0] || 'dsa'}
+                                    value={selectedCats[0] || ''}
                                     onChange={e => setSelectedCats([e.target.value])}
                                     className="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-primary"
                                 >
-                                    {CATEGORIES.filter(c => selectedCats.includes(c.id)).map(cat => (
+                                    {userCategories.filter(c => selectedCats.includes(c.id)).map(cat => (
                                         <option key={cat.id} value={cat.id}>{cat.label}</option>
                                     ))}
                                 </select>

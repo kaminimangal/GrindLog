@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
-import { CATEGORIES, getCategoryById } from '../data'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { useCategories } from '../context/CategoryContext'
 import HeatmapCalendar from '../components/HeatmapCalendar'
 
+// Custom tooltip shown when hovering over a bar in the chart
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     return (
@@ -19,49 +21,56 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 export default function ProgressTracker() {
   const { user } = useAuth()
-  const [allEntries, setAllEntries] = useState([])
-  const [loading, setLoading] = useState(true)
+
+  // Get the user's real categories from Supabase (via CategoryContext cache)
+  // getCategoryById → used for the "Top Category" stat card
+  // userCategories → used for the Skill Breakdown section
+  const { activeCategories: userCategories, getCategoryById } = useCategories()
+
+  // dateRange is UI state — stays as useState (not server data)
   const [dateRange, setDateRange] = useState('30days')
 
-  async function loadEntries() {
-    const { data } = await supabase
-      .from('entries')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-    if (data) setAllEntries(data)
-    setLoading(false)
-  }
+  // ── READ: Fetch ALL entries with React Query ────────────
+  // No date filter here — we fetch everything and filter in JS.
+  // The dateRange buttons change the JS filter, not the query itself.
+  // queryKey is 'all-entries' (distinct from Dashboard's 'entries' cache
+  // which only fetches today's entries).
+  const { data: allEntries = [], isLoading: loading } = useQuery({
+    queryKey: ['all-entries', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('entries')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: !!user,
+  })
 
-  useEffect(() => {
-    if (user) loadEntries()
-  }, [user])
-
-  // Calculate start date based on selected range
+  // ── Date range helpers ──────────────────────────────────
   function getRangeStart(range) {
     const now = new Date()
-    if (range === '7days') {
-      const d = new Date(); d.setDate(now.getDate() - 7); return [d, 7]
-    }
-    if (range === '30days') {
-      const d = new Date(); d.setDate(now.getDate() - 30); return [d, 30]
-    }
-    if (range === '90days') {
-      const d = new Date(); d.setDate(now.getDate() - 90); return [d, 90]
-    }
-    return [null, 90] // 'all' → no start date limit
+    if (range === '7days') { const d = new Date(); d.setDate(now.getDate() - 7); return [d, 7] }
+    if (range === '30days') { const d = new Date(); d.setDate(now.getDate() - 30); return [d, 30] }
+    if (range === '90days') { const d = new Date(); d.setDate(now.getDate() - 90); return [d, 90] }
+    return [null, 90]
   }
 
   const [rangeStart, numDays] = getRangeStart(dateRange)
 
-  // ← ADD THIS LINE:
-  const filteredEntries = rangeStart ? allEntries.filter(e => new Date(e.date + 'T00:00:00') >= rangeStart) : allEntries
+  // Filter entries to the selected date range
+  const filteredEntries = rangeStart
+    ? allEntries.filter(e => new Date(e.date + 'T00:00:00') >= rangeStart)
+    : allEntries
 
-  // ── REAL STAT 1: Total hours ──
+  // ── STAT 1: Total hours ─────────────────────────────────
   const totalMins = filteredEntries.reduce((s, e) => s + (e.minutes || 0), 0)
   const totalHours = (totalMins / 60).toFixed(1)
 
-  // ── REAL STAT 2: Top category ──
+  // ── STAT 2: Top category ────────────────────────────────
+  // getCategoryById now comes from useCategories() — reads real Supabase data
   const catMins = {}
   filteredEntries.forEach(e => {
     catMins[e.category_id] = (catMins[e.category_id] || 0) + (e.minutes || 0)
@@ -69,7 +78,7 @@ export default function ProgressTracker() {
   const topCatId = Object.entries(catMins).sort((a, b) => b[1] - a[1])[0]?.[0]
   const topCat = topCatId ? getCategoryById(topCatId) : null
 
-  // ── REAL STAT 3: Streak ──
+  // ── STAT 3: Streak ──────────────────────────────────────
   const uniqueDates = [...new Set(allEntries.map(e => e.date))]
     .sort((a, b) => b.localeCompare(a))
   let streak = 0
@@ -81,7 +90,7 @@ export default function ProgressTracker() {
     else break
   }
 
-  // ── REAL STAT 4: Weekly consistency ──
+  // ── STAT 4: Weekly consistency ──────────────────────────
   const last7Days = [...Array(7)].map((_, i) => {
     const d = new Date(); d.setDate(d.getDate() - i)
     return d.toISOString().slice(0, 10)
@@ -91,7 +100,7 @@ export default function ProgressTracker() {
   ).length
   const consistency = Math.round((daysWithEntries / 7) * 100)
 
-  // ── REAL CHART DATA: Last 30 days ──
+  // ── CHART DATA: Activity per day ────────────────────────
   const realChartData = [...Array(numDays)].map((_, i) => {
     const d = new Date()
     d.setDate(d.getDate() - (numDays - 1 - i))
@@ -106,8 +115,11 @@ export default function ProgressTracker() {
   })
   const maxMins = Math.max(...realChartData.map(d => d.mins), 0)
 
-  // ── REAL SKILL BREAKDOWN ──
-  const skillData = CATEGORIES.map(cat => {
+  // ── SKILL BREAKDOWN ─────────────────────────────────────
+  // KEY FIX: was CATEGORIES.map(...) — showed all 9 hard-coded categories.
+  // Now uses userCategories.map(...) — shows only the user's real categories.
+  // If they have "Frontend", "Backend", "Design" — those appear here, not DSA etc.
+  const skillData = userCategories.map(cat => {
     const mins = filteredEntries
       .filter(e => e.category_id === cat.id)
       .reduce((s, e) => s + (e.minutes || 0), 0)
@@ -115,7 +127,7 @@ export default function ProgressTracker() {
   }).filter(s => s.mins > 0).sort((a, b) => b.mins - a.mins)
   const maxSkillMins = skillData[0]?.mins || 1
 
-  // ── REAL MILESTONES ──
+  // ── MILESTONES ──────────────────────────────────────────
   const totalEntries = allEntries.length
   const completeCount = allEntries.filter(e => e.status === 'complete').length
   const milestones = [
@@ -144,7 +156,7 @@ export default function ProgressTracker() {
     },
   ]
 
-  // ── REAL DEEP INSIGHT ──
+  // ── DEEP INSIGHT: peak focus hour ──────────────────────
   const hourCounts = {}
   allEntries.forEach(e => {
     const hour = new Date(e.created_at).getHours()
@@ -155,6 +167,7 @@ export default function ProgressTracker() {
     ? `${topHour % 12 || 12}:00 ${topHour >= 12 ? 'PM' : 'AM'}`
     : null
 
+  // ── Early returns ───────────────────────────────────────
   if (loading) return (
     <div className="ml-0 md:ml-[240px] mt-14 p-4 md:p-8 text-text-muted text-sm">
       Loading your stats...
@@ -162,7 +175,7 @@ export default function ProgressTracker() {
   )
 
   if (allEntries.length === 0) return (
-    <div className="ml-0 md:ml-[240px] mt-14 p-4 md:p-8 ">
+    <div className="ml-0 md:ml-[240px] mt-14 p-4 md:p-8">
       <div className="border border-border rounded-lg p-16 text-center">
         <span className="material-symbols-outlined block mx-auto mb-3 text-text-muted" style={{ fontSize: '40px' }}>monitoring</span>
         <p className="text-text-primary font-medium mb-1">No data yet</p>
@@ -172,7 +185,8 @@ export default function ProgressTracker() {
   )
 
   return (
-    <div className="ml-0 md:ml-[240px] mt-14 p-4 md:p-8 ">
+    <div className="ml-0 md:ml-[240px] mt-14 p-4 md:p-8">
+
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
@@ -181,14 +195,16 @@ export default function ProgressTracker() {
         </div>
       </div>
 
-      {/* Real Stat cards */}
+      {/* Stat cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div className="border border-border rounded-lg p-5 bg-surface-low">
           <div className="flex items-center justify-between mb-3">
             <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted">Total Hours</p>
             <span className="material-symbols-outlined text-text-muted" style={{ fontSize: '16px' }}>schedule</span>
           </div>
-          <p className="text-2xl font-semibold text-text-primary">{totalHours}<span className="text-text-muted text-sm font-normal ml-1">h</span></p>
+          <p className="text-2xl font-semibold text-text-primary">
+            {totalHours}<span className="text-text-muted text-sm font-normal ml-1">h</span>
+          </p>
           <p className="text-xs text-text-muted mt-1">{totalEntries} log entries</p>
         </div>
 
@@ -230,7 +246,7 @@ export default function ProgressTracker() {
         </div>
       </div>
 
-
+      {/* Heatmap */}
       <div className="border border-border rounded-lg p-6 bg-surface-low mb-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold text-text-primary">Activity Heatmap</h2>
@@ -239,10 +255,12 @@ export default function ProgressTracker() {
         <HeatmapCalendar entries={allEntries} />
       </div>
 
-      {/* Real Chart */}
+      {/* Activity chart */}
       <div className="border border-border rounded-lg p-6 bg-surface-low mb-6">
         <div className="flex flex-col gap-3 mb-4">
-          <h2 className="text-base font-semibold text-text-primary">Focus Distribution — Last {numDays} Days</h2>
+          <h2 className="text-base font-semibold text-text-primary">
+            Focus Distribution — Last {numDays} Days
+          </h2>
           <div className="flex gap-2 flex-wrap">
             {[
               { id: '7days', label: 'Last 7 days' },
@@ -253,11 +271,11 @@ export default function ProgressTracker() {
                 key={range.id}
                 onClick={() => setDateRange(range.id)}
                 className={`px-3 py-1.5 rounded text-xs font-medium border transition-all ${dateRange === range.id
-                  ? 'bg-primary text-white border-primary'
-                  : 'border-border text-text-muted hover:bg-surface-low'
+                    ? 'bg-primary text-white border-primary'
+                    : 'border-border text-text-muted hover:bg-surface-low'
                   }`}
               >
-                {range.id === 'all' ? '📅' : '🗓️'} {range.label}
+                🗓️ {range.label}
               </button>
             ))}
           </div>
@@ -265,16 +283,26 @@ export default function ProgressTracker() {
             <span className="w-2 h-2 rounded-full bg-primary inline-block" />
             Minutes per day
           </div>
-
         </div>
+
         {totalMins === 0 ? (
           <p className="text-text-muted text-sm text-center py-8">
             No minutes logged yet. Add time spent when logging!
           </p>
         ) : (
           <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={realChartData} barSize={numDays === 7 ? 20 : numDays === 90 ? 5 : 14} margin={{ left: -20, right: 0, top: 4, bottom: 0 }}>
-              <XAxis dataKey="date" tick={{ fill: '#6B7280', fontSize: 11 }} tickLine={false} axisLine={false} interval={numDays === 7 ? 0 : numDays === 90 ? 9 : 6} />
+            <BarChart
+              data={realChartData}
+              barSize={numDays === 7 ? 20 : numDays === 90 ? 5 : 14}
+              margin={{ left: -20, right: 0, top: 4, bottom: 0 }}
+            >
+              <XAxis
+                dataKey="date"
+                tick={{ fill: '#6B7280', fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                interval={numDays === 7 ? 0 : numDays === 90 ? 9 : 6}
+              />
               <YAxis tick={{ fill: '#6B7280', fontSize: 11 }} tickLine={false} axisLine={false} />
               <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(147,51,234,0.08)' }} />
               <Bar dataKey="mins" radius={[2, 2, 0, 0]}>
@@ -287,8 +315,9 @@ export default function ProgressTracker() {
         )}
       </div>
 
-      {/* Real Skill Breakdown + Real Milestones */}
+      {/* Skill Breakdown + Milestones */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
         <div className="border border-border rounded-lg p-6 bg-surface-low">
           <h2 className="text-base font-semibold text-text-primary mb-5">Skill Breakdown</h2>
           {skillData.length === 0 ? (
@@ -305,8 +334,13 @@ export default function ProgressTracker() {
                     <span className="text-sm font-medium text-text-muted">{skill.hours}h</span>
                   </div>
                   <div className="w-full h-1.5 bg-border rounded-full overflow-hidden">
-                    <div className="h-full rounded-full transition-all duration-500"
-                      style={{ width: `${(skill.mins / maxSkillMins) * 100}%`, backgroundColor: skill.color }} />
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${(skill.mins / maxSkillMins) * 100}%`,
+                        backgroundColor: skill.color,
+                      }}
+                    />
                   </div>
                 </div>
               ))}
@@ -319,7 +353,10 @@ export default function ProgressTracker() {
             <h2 className="text-base font-semibold text-text-primary mb-4">Milestones</h2>
             <div className="space-y-3">
               {milestones.map(m => (
-                <div key={m.title} className="flex items-start gap-4 p-4 border border-border rounded-lg hover:bg-surface-high transition-colors">
+                <div
+                  key={m.title}
+                  className="flex items-start gap-4 p-4 border border-border rounded-lg hover:bg-surface-high transition-colors"
+                >
                   <div className="w-9 h-9 bg-surface-high rounded-lg flex items-center justify-center flex-shrink-0 text-base">
                     {m.icon}
                   </div>
@@ -350,6 +387,7 @@ export default function ProgressTracker() {
             )}
           </div>
         </div>
+
       </div>
     </div>
   )
