@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { CATEGORIES, getCategoryById } from '../data'
+import { useCategories } from '../context/CategoryContext'
 import { useStreak } from '../hooks/useStreak'
 
 const weekDays = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
@@ -9,132 +10,187 @@ const weekDays = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 export default function Goals() {
   const { user } = useAuth()
   const { streak, loggedThisWeek, totalEntries } = useStreak(user)
+  const { activeCategories: userCategories, getCategoryById } = useCategories()
+  const queryClient = useQueryClient()
 
-  const [goals, setGoals] = useState([])
-  const [tasks, setTasks] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  // New goal modal state
+  // ── Form state (UI only — stays as useState) ────────────
+  // These are NOT server data. They're just what the user is typing in a form.
+  // React Query doesn't manage form fields — useState is still correct here.
   const [showNewGoal, setShowNewGoal] = useState(false)
   const [newTitle, setNewTitle] = useState('')
-  const [newCategoryId, setNewCategoryId] = useState('dsa')
+  const [newCategoryId, setNewCategoryId] = useState('')
   const [newDeadline, setNewDeadline] = useState('')
-  const [saving, setSaving] = useState(false)
 
-  // New task inline form
   const [showNewTask, setShowNewTask] = useState(false)
   const [newTaskText, setNewTaskText] = useState('')
   const [newTaskPriority, setNewTaskPriority] = useState('Med')
 
   const todayIndex = (new Date().getDay() + 6) % 7
 
+  // When categories load from Supabase, set the form default to the first one.
+  // We can't do useState(userCategories[0]?.id) because categories aren't loaded yet
+  // at the time useState runs. So we watch for changes with useEffect.
   useEffect(() => {
-    if (user) {
-      loadGoals()
-      loadTasks()
+    if (userCategories.length > 0 && !newCategoryId) {
+      setNewCategoryId(userCategories[0].id)
     }
-  }, [user])
+  }, [userCategories])
 
-  // ── Data loading ────────────────────────────────────────
-  async function loadGoals() {
-    const { data, error } = await supabase
-      .from('goals')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-    if (error) console.error('loadGoals error:', error.message)
-    if (data) setGoals(data)
-    setLoading(false)
-  }
+  // ── READ: Fetch goals with React Query ──────────────────
+  // React Query handles: fetching, caching, loading state, and re-fetching.
+  // We get `goals` (the array) and `isLoading` (boolean) for free.
+  // `enabled: !!user` means "only run this query if user exists" — replaces
+  // the old `if (user) loadGoals()` check inside useEffect.
+  const { data: goals = [], isLoading: loading } = useQuery({
+    queryKey: ['goals', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('goals')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+      if (error) throw error   // React Query catches this and puts it in `error` state
+      return data ?? []
+    },
+    enabled: !!user,
+  })
 
-  async function loadTasks() {
-    const { data, error } = await supabase
-      .from('tasks')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: true })
-    if (error) console.error('loadTasks error:', error.message)
-    if (data) setTasks(data)
-  }
+  // ── READ: Fetch tasks with React Query ──────────────────
+  const { data: tasks = [] } = useQuery({
+    queryKey: ['tasks', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true })
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: !!user,
+  })
 
-  // ── Goal CRUD ───────────────────────────────────────────
-  async function handleCreateGoal(e) {
-    e.preventDefault()
-    if (!newTitle.trim()) return
-    setSaving(true)
-
-    const { data, error } = await supabase
-      .from('goals')
-      .insert({
-        user_id: user.id,
-        title: newTitle.trim(),
-        category_id: newCategoryId,
-        deadline: newDeadline || null,
-        progress: 0,
-        milestones_done: 0,
-        milestones_total: 0,
-      })
-      .select()
-      .single()
-
-    if (error) console.error('createGoal error:', error.message)
-    if (data) {
-      setGoals([data, ...goals]) // prepend so it appears at top immediately
+  // ── WRITE: Create goal ──────────────────────────────────
+  // mutationFn = what to actually do (the Supabase call)
+  // onSuccess  = what to do AFTER it succeeds
+  //   → invalidateQueries tells React Query: "goals data is now stale, go re-fetch"
+  //   → This is why we NEVER do setGoals([newGoal, ...goals]) anymore.
+  //     We just say "stale" and React Query fetches the real list from Supabase.
+  const createGoalMutation = useMutation({
+    mutationFn: async ({ title, categoryId, deadline }) => {
+      const { data, error } = await supabase
+        .from('goals')
+        .insert({
+          user_id: user.id,
+          title,
+          category_id: categoryId,
+          deadline: deadline || null,
+          progress: 0,
+          milestones_done: 0,
+          milestones_total: 0,
+        })
+        .select()
+        .single()
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['goals', user?.id] })
+      // Reset the form
       setNewTitle('')
-      setNewCategoryId('dsa')
+      setNewCategoryId(userCategories[0]?.id || '')
       setNewDeadline('')
       setShowNewGoal(false)
-    }
-    setSaving(false)
-  }
+    },
+  })
 
-  async function handleDeleteGoal(id) {
-    await supabase.from('goals').delete().eq('id', id)
-    setGoals(goals.filter(g => g.id !== id))
-    // Tasks with goal_id = id become orphaned (goal_id set to null by DB)
-    // So we remove them from view too for a clean experience
-    setTasks(tasks.filter(t => t.goal_id !== id))
-  }
+  // ── WRITE: Delete goal ──────────────────────────────────
+  // Deleting a goal may orphan its tasks (goal_id becomes null in DB).
+  // So we invalidate BOTH caches — goals AND tasks — to stay in sync.
+  const deleteGoalMutation = useMutation({
+    mutationFn: async (id) => {
+      const { error } = await supabase.from('goals').delete().eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['goals', user?.id] })
+      queryClient.invalidateQueries({ queryKey: ['tasks', user?.id] })
+    },
+  })
 
-  // ── Task CRUD ───────────────────────────────────────────
-  async function handleCreateTask(e) {
-    e.preventDefault()
-    if (!newTaskText.trim()) return
-
-    const { data, error } = await supabase
-      .from('tasks')
-      .insert({
-        user_id: user.id,
-        text: newTaskText.trim(),
-        priority: newTaskPriority,
-        done: false,
-      })
-      .select()
-      .single()
-
-    if (error) console.error('createTask error:', error.message)
-    if (data) {
-      setTasks([...tasks, data])
+  // ── WRITE: Create task ──────────────────────────────────
+  const createTaskMutation = useMutation({
+    mutationFn: async ({ text, priority }) => {
+      const { data, error } = await supabase
+        .from('tasks')
+        .insert({ user_id: user.id, text, priority, done: false })
+        .select()
+        .single()
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks', user?.id] })
       setNewTaskText('')
       setNewTaskPriority('Med')
       setShowNewTask(false)
-    }
+    },
+  })
+
+  // ── WRITE: Toggle task done/undone ──────────────────────
+  const toggleTaskMutation = useMutation({
+    mutationFn: async (task) => {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ done: !task.done })
+        .eq('id', task.id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks', user?.id] })
+    },
+  })
+
+  // ── WRITE: Delete task ──────────────────────────────────
+  const deleteTaskMutation = useMutation({
+    mutationFn: async (id) => {
+      const { error } = await supabase.from('tasks').delete().eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks', user?.id] })
+    },
+  })
+
+  // ── Thin event handlers ─────────────────────────────────
+  // These are now tiny — they just call the mutation.
+  // All the Supabase logic + state management is inside the mutation objects above.
+  function handleCreateGoal(e) {
+    e.preventDefault()
+    if (!newTitle.trim()) return
+    createGoalMutation.mutate({
+      title: newTitle.trim(),
+      categoryId: newCategoryId,
+      deadline: newDeadline,
+    })
   }
 
-  async function handleToggleTask(task) {
-    const newDone = !task.done
-    const { error } = await supabase
-      .from('tasks')
-      .update({ done: newDone })
-      .eq('id', task.id)
-
-    if (error) console.error('toggleTask error:', error.message)
-    else setTasks(tasks.map(t => t.id === task.id ? { ...t, done: newDone } : t))
+  function handleDeleteGoal(id) {
+    deleteGoalMutation.mutate(id)
   }
 
-  async function handleDeleteTask(id) {
-    await supabase.from('tasks').delete().eq('id', id)
-    setTasks(tasks.filter(t => t.id !== id))
+  function handleCreateTask(e) {
+    e.preventDefault()
+    if (!newTaskText.trim()) return
+    createTaskMutation.mutate({ text: newTaskText.trim(), priority: newTaskPriority })
+  }
+
+  function handleToggleTask(task) {
+    toggleTaskMutation.mutate(task)
+  }
+
+  function handleDeleteTask(id) {
+    deleteTaskMutation.mutate(id)
   }
 
   // ── Week label for header ───────────────────────────────
@@ -222,7 +278,7 @@ export default function Goals() {
                             backgroundColor: `${cat.color}15`,
                           }}
                         >
-                          {cat.short}
+                          {cat.short_label}
                         </span>
                         <button
                           onClick={() => handleDeleteGoal(goal.id)}
@@ -309,9 +365,10 @@ export default function Goals() {
                   </select>
                   <button
                     type="submit"
-                    className="bg-primary text-white px-4 py-2 rounded text-sm font-semibold hover:bg-primary/90 transition-colors"
+                    disabled={createTaskMutation.isPending}
+                    className="bg-primary text-white px-4 py-2 rounded text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-60"
                   >
-                    Add task
+                    {createTaskMutation.isPending ? 'Adding...' : 'Add task'}
                   </button>
                   <button
                     type="button"
@@ -395,10 +452,10 @@ export default function Goals() {
                 <div key={i} className="flex flex-col items-center gap-1">
                   <span className="text-[10px] text-text-muted">{d}</span>
                   <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium ${loggedThisWeek.includes(i)
-                      ? 'bg-orange-500 text-white'
-                      : i === todayIndex
-                        ? 'border-2 border-orange-500/50 text-orange-400'
-                        : 'border border-border text-text-muted'
+                    ? 'bg-orange-500 text-white'
+                    : i === todayIndex
+                      ? 'border-2 border-orange-500/50 text-orange-400'
+                      : 'border border-border text-text-muted'
                     }`}>
                     {loggedThisWeek.includes(i)
                       ? <span className="material-symbols-outlined text-white" style={{ fontSize: '13px' }}>check</span>
@@ -473,7 +530,7 @@ export default function Goals() {
                   onChange={e => setNewCategoryId(e.target.value)}
                   className="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-primary"
                 >
-                  {CATEGORIES.map(cat => (
+                  {userCategories.map(cat => (
                     <option key={cat.id} value={cat.id}>{cat.label}</option>
                   ))}
                 </select>
@@ -499,10 +556,10 @@ export default function Goals() {
                 </button>
                 <button
                   type="submit"
-                  disabled={saving || !newTitle.trim()}
+                  disabled={createGoalMutation.isPending || !newTitle.trim()}
                   className="flex-1 bg-primary text-white py-2 rounded text-sm font-semibold hover:bg-primary/90 disabled:opacity-60 transition-colors"
                 >
-                  {saving ? 'Saving...' : 'Create Goal'}
+                  {createGoalMutation.isPending ? 'Saving...' : 'Create Goal'}
                 </button>
               </div>
             </form>

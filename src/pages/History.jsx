@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { CATEGORIES, getCategoryById } from '../data'
+import { useCategories } from '../context/CategoryContext'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import EditModal from '../components/EditModal'
@@ -19,6 +19,8 @@ function fmtDate(str) {
 
 export default function History() {
   const { user } = useAuth()
+  const { activeCategories: userCategories, getCategoryById } = useCategories()
+
 
   // ── Entries + pagination ────────────────────────────────
   const [allEntries, setAllEntries] = useState([])
@@ -151,7 +153,7 @@ export default function History() {
   const topCat = topCatId ? getCategoryById(topCatId) : null
 
   const activeCatIds = [...new Set(allEntries.map(e => e.category_id))]
-  const activeCategories = CATEGORIES.filter(c => activeCatIds.includes(c.id))
+  const usedCategories = userCategories.filter(c => activeCatIds.includes(c.id))
 
   // ── Render ───────────────────────────────────────────────
 
@@ -231,12 +233,12 @@ export default function History() {
             key={s}
             onClick={() => setStatusFilter(s)}
             className={`px-3 py-1.5 rounded text-xs font-medium border transition-all capitalize ${statusFilter === s
-                ? s === 'complete'
-                  ? 'bg-green-500 text-white border-green-500'
-                  : s === 'active'
-                    ? 'bg-blue-500 text-white border-blue-500'
-                    : 'bg-primary text-white border-primary'
-                : 'border-border text-text-muted hover:bg-surface-low'
+              ? s === 'complete'
+                ? 'bg-green-500 text-white border-green-500'
+                : s === 'active'
+                  ? 'bg-blue-500 text-white border-blue-500'
+                  : 'bg-primary text-white border-primary'
+              : 'border-border text-text-muted hover:bg-surface-low'
               }`}
           >
             {s === 'all' ? '📋 All' : s === 'active' ? '🔵 Active' : '✅ Complete'}
@@ -256,8 +258,8 @@ export default function History() {
             key={range.id}
             onClick={() => setDateRange(range.id)}
             className={`px-3 py-1.5 rounded text-xs font-medium border transition-all ${dateRange === range.id
-                ? 'bg-primary text-white border-primary'
-                : 'border-border text-text-muted hover:bg-surface-low'
+              ? 'bg-primary text-white border-primary'
+              : 'border-border text-text-muted hover:bg-surface-low'
               }`}
           >
             {range.id === 'all' ? '📅' : '🗓️'} {range.label}
@@ -270,13 +272,13 @@ export default function History() {
         <button
           onClick={() => setFilter('all')}
           className={`px-3 py-1.5 rounded text-xs font-medium transition-colors border ${filter === 'all'
-              ? 'bg-primary text-white border-primary'
-              : 'border-border text-text-muted hover:bg-surface-low'
+            ? 'bg-primary text-white border-primary'
+            : 'border-border text-text-muted hover:bg-surface-low'
             }`}
         >
           All
         </button>
-        {activeCategories.map(cat => (
+        {usedCategories.map(cat => (
           <button
             key={cat.id}
             onClick={() => setFilter(cat.id)}
@@ -358,13 +360,13 @@ export default function History() {
                               className="text-[11px] font-bold uppercase tracking-widest"
                               style={{ color: cat.color }}
                             >
-                              {cat.short}
+                              {cat.short_label}
                             </span>
                             <span className="text-xs text-text-muted">· {time}</span>
                             <span
                               className={`text-[10px] px-2 py-0.5 rounded-full border ${entry.status === 'complete'
-                                  ? 'bg-green-400/10 text-green-400 border-green-400/20'
-                                  : 'bg-blue-400/10 text-blue-400 border-blue-400/20'
+                                ? 'bg-green-400/10 text-green-400 border-green-400/20'
+                                : 'bg-blue-400/10 text-blue-400 border-blue-400/20'
                                 }`}
                             >
                               {entry.status === 'complete' ? '✅ Complete' : '🔵 Active'}

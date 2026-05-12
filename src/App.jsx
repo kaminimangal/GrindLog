@@ -147,8 +147,8 @@ function AppRoutes() {
         <Route path="/goals" element={<Goals />} />
         <Route path="/ai" element={<AIMotivation />} />
         <Route path="/settings" element={<Settings />} />
-        <Route path="*" element={<Navigate to="/" />} />
         <Route path="/categories" element={<CategorySets />} />
+        <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </>
   )
