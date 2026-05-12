@@ -38,7 +38,7 @@ function EntryCard({ entry, onDelete, onStatusChange, onEdit, getCategoryById })
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: cat.color }}>
-            {cat.short}
+            {cat.short_label}
           </span>
           <span className="text-text-muted text-xs">· {time}</span>
           {isComplete && (

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { CATEGORIES, getCategoryById } from '../data'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { useCategories } from '../context/CategoryContext'
 import { useNavigate } from 'react-router-dom'
 
-// Issue 6 fix — timezone safe timeAgo
+// Timezone-safe timeAgo helper
 function timeAgo(createdAt) {
   const d = new Date(createdAt)
   const now = new Date()
@@ -16,11 +17,14 @@ function timeAgo(createdAt) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' · ' + timeStr
 }
 
+// ─── Sub-component: a single "left off" card ──────────────────────────────────
+// LeftOffCard calls useCategories() directly — it lives inside CategoryProvider
+// so it can use the hook. It reads from the existing cache — no extra DB call.
 function LeftOffCard({ entry, onMarkComplete }) {
+  const { getCategoryById } = useCategories()  // ← hook called inside sub-component
   const cat = getCategoryById(entry.category_id)
   const navigate = useNavigate()
 
-  // Issue 2 fix — Continue button navigates to dashboard with category
   function handleContinue() {
     navigate('/', { state: { preselectedCat: entry.category_id } })
   }
@@ -35,7 +39,7 @@ function LeftOffCard({ entry, onMarkComplete }) {
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
             <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: cat.color }}>
-              {cat.short}
+              {cat.short_label}  {/* ← short_label, not short */}
             </span>
           </div>
           <span className="text-[11px] text-text-muted">{timeAgo(entry.created_at)}</span>
@@ -44,7 +48,6 @@ function LeftOffCard({ entry, onMarkComplete }) {
       </div>
 
       <div className="flex items-center justify-between gap-3">
-        {/* Mark complete button */}
         <button
           onClick={() => onMarkComplete(entry.id)}
           className="flex items-center gap-1 text-xs text-text-muted hover:text-green-400 border border-border hover:border-green-400/50 px-3 py-1.5 rounded transition-all"
@@ -53,7 +56,6 @@ function LeftOffCard({ entry, onMarkComplete }) {
           Done
         </button>
 
-        {/* Continue button */}
         <button
           onClick={handleContinue}
           className="text-xs font-semibold px-4 py-1.5 border border-border text-text-secondary transition-all rounded"
@@ -75,49 +77,65 @@ function LeftOffCard({ entry, onMarkComplete }) {
   )
 }
 
+// ─── Main page component ──────────────────────────────────────────────────────
 export default function WhereILeftOff() {
   const { user } = useAuth()
-  const [allEntries, setAllEntries] = useState([])
+  const { activeCategories: userCategories } = useCategories()
+  const queryClient = useQueryClient()
   const [filter, setFilter] = useState('all')
-  const [loading, setLoading] = useState(true)
 
-  async function loadActiveEntries() {
-    const { data } = await supabase
-      .from('entries')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('status', 'active')
-      .order('created_at', { ascending: false })
-    if (data) setAllEntries(data)
-    setLoading(false)
+  // ── READ: fetch active entries with React Query ─────────
+  // Same pattern as Goals.jsx — no more useState + useEffect + loadActiveEntries()
+  const { data: allEntries = [], isLoading: loading } = useQuery({
+    queryKey: ['leftoff-entries', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('entries')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: !!user,
+  })
+
+  // ── WRITE: mark an entry as complete ────────────────────
+  // After success, invalidate two caches:
+  //   1. leftoff-entries — this page's list needs to refresh (entry disappears)
+  //   2. entries — Dashboard's today-entries list should reflect the new status
+  const markCompleteMutation = useMutation({
+    mutationFn: async (id) => {
+      const { error } = await supabase
+        .from('entries')
+        .update({ status: 'complete' })
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leftoff-entries', user?.id] })
+      queryClient.invalidateQueries({ queryKey: ['entries', user?.id] })
+    },
+  })
+
+  function handleMarkComplete(id) {
+    markCompleteMutation.mutate(id)
   }
 
-  useEffect(() => {
-    if (user) loadActiveEntries()
-  }, [user])
-
-
-
-  async function handleMarkComplete(id) {
-    await supabase.from('entries').update({ status: 'complete' }).eq('id', id)
-    setAllEntries(allEntries.filter(e => e.id !== id))
-  }
-
-  // Issue 5 fix — filter by category
+  // Filter entries by category
   const filtered = filter === 'all'
     ? allEntries
     : allEntries.filter(e => e.category_id === filter)
 
-  // Get only categories that have active entries
+  // Only show filter buttons for categories that have active entries
   const activeCatIds = [...new Set(allEntries.map(e => e.category_id))]
-  const activeCategories = CATEGORIES.filter(c => activeCatIds.includes(c.id))
+  const usedCategories = userCategories.filter(c => activeCatIds.includes(c.id))
 
-  // Issue 4 fix — count summary
   const catCount = activeCatIds.length
 
   return (
-    <div className="ml-0 md:ml-[240px] mt-14 p-4 md:p-8 ">
-      {/* Header with count summary */}
+    <div className="ml-0 md:ml-[240px] mt-14 p-4 md:p-8">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-text-primary mb-1">
           Pick up where you stopped
@@ -129,7 +147,7 @@ export default function WhereILeftOff() {
         </p>
       </div>
 
-      {/* Issue 5 fix — filter bar */}
+      {/* Category filter bar */}
       {!loading && allEntries.length > 0 && (
         <div className="flex gap-2 mb-6 flex-wrap">
           <button
@@ -141,7 +159,7 @@ export default function WhereILeftOff() {
           >
             All ({allEntries.length})
           </button>
-          {activeCategories.map(cat => {
+          {usedCategories.map(cat => {
             const count = allEntries.filter(e => e.category_id === cat.id).length
             return (
               <button
