@@ -39,12 +39,20 @@ export default function Settings() {
     async function handleSaveName() {
         if (!displayName.trim()) return
         setSaving(true)
-        await supabase.auth.updateUser({
+        // ✅ FIX 3: capture the error return value — before this, the error was ignored
+        // If the update failed (expired session, network issue, etc.)
+        // it would still show "Name updated!" — lying to the user
+        const { error } = await supabase.auth.updateUser({
             data: { full_name: displayName.trim() }
         })
         setSaving(false)
-        setNameSuccess('Name updated!')
-        setTimeout(() => setNameSuccess(''), 2000)
+        if (error) {
+            // Show the real error so user knows something went wrong
+            setPwError('Could not update name: ' + error.message)
+        } else {
+            setNameSuccess('Name updated!')
+            setTimeout(() => setNameSuccess(''), 2000)
+        }
     }
 
     async function handleChangePassword() {

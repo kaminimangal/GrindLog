@@ -109,14 +109,19 @@ export function CategoryProvider({ children }) {
     // This replaces the old getCategoryById() from data.js.
     // Falls back gracefully if the category no longer exists.
     function getCategoryById(id) {
-        return (
-            activeCategories.find(c => c.id === id) ?? {
-                id,
-                label: 'Unknown',
-                color: '#6B7280',
-                short_label: '???',
-            }
-        )
+        // First check the active set (fastest path — most lookups land here)
+        const inActive = activeCategories.find(c => c.id === id)
+        if (inActive) return inActive
+
+        // Not in active set — search all other sets
+        // allSets is shaped like: [{ id, name, categories: [...] }, ...]
+        for (const set of allSets) {
+            const found = set.categories?.find(c => c.id === id)
+            if (found) return found
+        }
+
+        // Truly unknown — category was deleted entirely
+        return { id, label: 'Unknown', color: '#6B7280', short_label: '???' }
     }
 
     return (
