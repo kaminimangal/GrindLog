@@ -45,30 +45,44 @@ export default function AIMotivation() {
         setError('')
         setResult(null)
 
-        // Get the user's session token — this proves to the Edge Function who we are
-        const { data: { session } } = await supabase.auth.getSession()
+        try {
+            // Get session — could be null if expired
+            const { data: { session } } = await supabase.auth.getSession()
 
-        const response = await fetch(
-            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-motivation`,
-            {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    // Send the JWT — the Edge Function uses this to fetch the right user's data
-                    'Authorization': `Bearer ${session.access_token}`,
-                },
+            // ← DEFENSIVE CHECK: if no session, tell the user clearly
+            if (!session) {
+                setError('Your session has expired. Please sign out and sign back in.')
+                setLoading(false)
+                return
             }
-        )
 
-        const data = await response.json()
+            const response = await fetch(
+                `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-motivation`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${session.access_token}`,
+                    },
+                }
+            )
 
-        if (!response.ok || data.error) {
-            setError(data.error || 'Something went wrong. Try again.')
-        } else {
-            setResult(data)
+            const data = await response.json()
+
+            if (!response.ok || data.error) {
+                setError(data.error || 'Something went wrong. Try again.')
+            } else {
+                setResult(data)
+            }
+
+        } catch (err) {
+            // ← catches any unexpected crash (network down, JSON parse fail, etc.)
+            console.error('AI analysis error:', err)
+            setError('Something went wrong. Check your connection and try again.')
+        } finally {
+            // ← finally ALWAYS runs — even if there was an error or early return
+            setLoading(false)
         }
-
-        setLoading(false)
     }
 
     return (
@@ -120,7 +134,7 @@ export default function AIMotivation() {
                         Ready to see your future?
                     </h2>
                     <p className="text-text-muted text-sm max-w-sm mx-auto leading-relaxed mb-6">
-                        Claude will read every log you've written, find your patterns, and tell you
+                        Groq will read every log you've written, find your patterns, and tell you
                         exactly where you're headed in 1, 3, and 5 years — based on your real data.
                     </p>
                     <button

@@ -1,4 +1,5 @@
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
+
 
 const PAGE_TITLES = {
   '/': 'Dashboard',
@@ -6,10 +7,14 @@ const PAGE_TITLES = {
   '/history': 'History',
   '/progress': 'Progress Tracker',
   '/goals': 'Goals',
+  '/ai': 'AI Motivation',
+  '/settings': 'Settings',
+  '/categories': 'Category Sets',
 }
 
 export default function TopBar({ onMenuClick }) {
   const { pathname } = useLocation()
+  const navigate = useNavigate()
   const title = PAGE_TITLES[pathname] || 'GrindLog'
 
   return (
@@ -38,7 +43,11 @@ export default function TopBar({ onMenuClick }) {
         <button className="text-text-muted hover:text-white transition-colors">
           <span className="material-symbols-outlined">notifications</span>
         </button>
-        <button className="text-text-muted hover:text-white transition-colors">
+        <button
+          onClick={() => navigate('/settings')}
+          title="Settings"
+          className="text-text-muted hover:text-white transition-colors"
+        >
           <span className="material-symbols-outlined">settings</span>
         </button>
       </div>
