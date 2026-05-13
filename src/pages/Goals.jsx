@@ -25,6 +25,14 @@ export default function Goals() {
   const [newTaskText, setNewTaskText] = useState('')
   const [newTaskPriority, setNewTaskPriority] = useState('Med')
 
+  const [editingGoal, setEditingGoal] = useState(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editCategoryId, setEditCategoryId] = useState('')
+  const [editDeadline, setEditDeadline] = useState('')
+  const [editProgress, setEditProgress] = useState(0)
+  const [editMilestonesDone, setEditMilestonesDone] = useState(0)
+  const [editMilestonesTotal, setEditMilestonesTotal] = useState(0)
+
   const todayIndex = (new Date().getDay() + 6) % 7
 
   // When categories load from Supabase, set the form default to the first one.
@@ -104,6 +112,30 @@ export default function Goals() {
     },
   })
 
+  // ── WRITE: Update goal ──────────────────────────────────
+  // Same pattern as create — but uses .update() instead of .insert()
+  // and needs the goal's ID to know which row to update.
+  const updateGoalMutation = useMutation({
+    mutationFn: async ({ id, title, categoryId, deadline, progress, milestonesDone, milestonesTotal }) => {
+      const { error } = await supabase
+        .from('goals')
+        .update({
+          title,
+          category_id: categoryId,
+          deadline: deadline || null,
+          progress,
+          milestones_done: milestonesDone,
+          milestones_total: milestonesTotal,
+        })
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['goals', user?.id] })
+      setEditingGoal(null)  // closes the modal
+    },
+  })
+
   // ── WRITE: Delete goal ──────────────────────────────────
   // Deleting a goal may orphan its tasks (goal_id becomes null in DB).
   // So we invalidate BOTH caches — goals AND tasks — to stay in sync.
@@ -174,6 +206,33 @@ export default function Goals() {
       deadline: newDeadline,
     })
   }
+
+  // Opens the edit modal and pre-fills all fields with the goal's current values.
+  // This is the "load existing data into the form" step.
+  function handleEditGoal(goal) {
+    setEditingGoal(goal)
+    setEditTitle(goal.title)
+    setEditCategoryId(goal.category_id)
+    setEditDeadline(goal.deadline || '')
+    setEditProgress(goal.progress || 0)
+    setEditMilestonesDone(goal.milestones_done || 0)
+    setEditMilestonesTotal(goal.milestones_total || 0)
+  }
+
+  function handleUpdateGoal(e) {
+    e.preventDefault()
+    if (!editTitle.trim()) return
+    updateGoalMutation.mutate({
+      id: editingGoal.id,
+      title: editTitle.trim(),
+      categoryId: editCategoryId,
+      deadline: editDeadline,
+      progress: editProgress,
+      milestonesDone: editMilestonesDone,
+      milestonesTotal: editMilestonesTotal,
+    })
+  }
+
 
   function handleDeleteGoal(id) {
     deleteGoalMutation.mutate(id)
@@ -280,12 +339,23 @@ export default function Goals() {
                         >
                           {cat.short_label}
                         </span>
-                        <button
-                          onClick={() => handleDeleteGoal(goal.id)}
-                          className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-red-400 transition-all"
-                        >
-                          <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>delete</span>
-                        </button>
+                        {/* Edit + Delete buttons — both appear on hover */}
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleEditGoal(goal)}
+                            className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-primary transition-all"
+                            title="Edit goal"
+                          >
+                            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>edit</span>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteGoal(goal.id)}
+                            className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-red-400 transition-all"
+                            title="Delete goal"
+                          >
+                            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>delete</span>
+                          </button>
+                        </div>
                       </div>
 
                       <h3 className="text-base font-semibold text-text-primary mb-3">{goal.title}</h3>
@@ -566,6 +636,130 @@ export default function Goals() {
           </div>
         </div>
       )}
+      {/* ── Edit Goal Modal ── */}
+      {/* editingGoal !== null means the modal is open */}
+      {editingGoal && (
+        <div
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+          onClick={() => setEditingGoal(null)}
+        >
+          <div
+            className="bg-surface-low border border-border rounded-xl p-6 w-full max-w-md"
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="text-base font-semibold text-text-primary mb-4">Edit Goal</h3>
+            <form onSubmit={handleUpdateGoal} className="space-y-4">
+
+              {/* Title */}
+              <div>
+                <label className="text-xs text-text-muted uppercase tracking-widest mb-1.5 block">Goal title</label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={e => setEditTitle(e.target.value)}
+                  autoFocus
+                  className="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-primary"
+                />
+              </div>
+
+              {/* Category */}
+              <div>
+                <label className="text-xs text-text-muted uppercase tracking-widest mb-1.5 block">Category</label>
+                <select
+                  value={editCategoryId}
+                  onChange={e => setEditCategoryId(e.target.value)}
+                  className="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-primary"
+                >
+                  {userCategories.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Deadline */}
+              <div>
+                <label className="text-xs text-text-muted uppercase tracking-widest mb-1.5 block">Deadline (optional)</label>
+                <input
+                  type="date"
+                  value={editDeadline}
+                  onChange={e => setEditDeadline(e.target.value)}
+                  className="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-primary"
+                />
+              </div>
+
+              {/* Progress slider */}
+              {/* input type="range" renders a draggable slider automatically */}
+              {/* Number() converts the string value to an integer */}
+              <div>
+                <div className="flex justify-between mb-2">
+                  <label className="text-xs text-text-muted uppercase tracking-widest">Progress</label>
+                  <span className="text-xs font-semibold text-primary">{editProgress}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={editProgress}
+                  onChange={e => setEditProgress(Number(e.target.value))}
+                  className="w-full accent-primary"
+                />
+                <div className="flex justify-between text-[10px] text-text-muted mt-1">
+                  <span>0%</span>
+                  <span>50%</span>
+                  <span>100%</span>
+                </div>
+              </div>
+
+              {/* Milestones */}
+              <div>
+                <label className="text-xs text-text-muted uppercase tracking-widest mb-2 block">
+                  Milestones completed
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min="0"
+                    value={editMilestonesDone}
+                    onChange={e => setEditMilestonesDone(Number(e.target.value))}
+                    placeholder="Done"
+                    className="flex-1 min-w-0 bg-bg border border-border rounded px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-primary"
+                  />
+                  <span className="text-text-muted text-sm flex-shrink-0">of</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editMilestonesTotal}
+                    onChange={e => setEditMilestonesTotal(Number(e.target.value))}
+                    placeholder="Total"
+                    className="flex-1 min-w-0 bg-bg border border-border rounded px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-primary"
+                  />
+                </div>
+                <p className="text-[11px] text-text-muted mt-1">
+                  e.g. 3 of 5 milestones completed
+                </p>
+              </div>
+
+              <div className="flex gap-3 mt-5">
+                <button
+                  type="button"
+                  onClick={() => setEditingGoal(null)}
+                  className="flex-1 border border-border text-text-muted py-2 rounded text-sm hover:bg-surface-high transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updateGoalMutation.isPending || !editTitle.trim()}
+                  className="flex-1 bg-primary text-white py-2 rounded text-sm font-semibold hover:bg-primary/90 disabled:opacity-60 transition-colors"
+                >
+                  {updateGoalMutation.isPending ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }

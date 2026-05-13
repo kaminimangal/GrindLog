@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { useQuery } from '@tanstack/react-query'
 
 const navItems = [
   { to: '/', icon: 'dashboard', label: 'Dashboard' },
@@ -17,14 +17,19 @@ const navItems = [
 export default function Sidebar({ isOpen, onClose }) {
   const { user, signOut } = useAuth()
   const displayName = user?.user_metadata?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'You'
-  const [entryCount, setEntryCount] = useState(0)
 
-  useEffect(() => {
-    if (user) {
-      supabase.from('entries').select('id', { count: 'exact' }).eq('user_id', user.id)
-        .then(({ count }) => setEntryCount(count || 0))
-    }
-  }, [user])
+  const { data: totalCount = 0 } = useQuery({
+    queryKey: ['entry-count', user?.id],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('entries')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+      if (error) throw error
+      return count ?? 0
+    },
+    enabled: !!user,
+  })
 
   return (
     <aside className={`fixed left-0 top-0 h-full w-[240px] border-r border-border bg-bg flex flex-col py-6 z-50 transition-transform duration-300 ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
@@ -67,7 +72,7 @@ export default function Sidebar({ isOpen, onClose }) {
             </div>
             <div>
               <p className="text-xs font-semibold text-text-secondary">{displayName}</p>
-              <p className="text-[10px] text-text-muted">{entryCount} logs total</p>
+              <p className="text-[10px] text-text-muted">{totalCount} logs total</p>
             </div>
           </div>
           <button onClick={signOut} title="Sign out" className="text-text-muted hover:text-red-400 transition-colors">

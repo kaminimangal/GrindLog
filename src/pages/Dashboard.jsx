@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import EditModal from '../components/EditModal'
 import ConfirmModal from '../components/ConfirmModal'
 import { useStreak } from '../hooks/useStreak'
+import { useLocation } from 'react-router-dom'
 
 // ─────────────────────────────────────────────
 // Sub-components (unchanged)
@@ -93,6 +94,7 @@ function EntryCard({ entry, onDelete, onStatusChange, onEdit, getCategoryById })
 export default function Dashboard() {
   const { user } = useAuth()
   const today = new Date().toISOString().slice(0, 10)
+  const location = useLocation()
 
   // ── queryClient lets us trigger invalidations from inside mutation callbacks ──
   // We get it from the context set up by QueryClientProvider in main.jsx.
@@ -111,15 +113,24 @@ export default function Dashboard() {
   const [editingEntry, setEditingEntry] = useState(null)
   const [deleteId, setDeleteId] = useState(null)
   // AFTER — default to the first active category's ID, or empty string while loading:
-  const [selectedCat, setSelectedCat] = useState('')
   const { activeCategories, getCategoryById, isLoading: catsLoading } = useCategories()
+  const [selectedCat, setSelectedCat] = useState(
+    location.state?.preselectedCat || activeCategories[0]?.id || ''
+  )
 
   // And add this effect directly below to set it once categories load:
+
   useEffect(() => {
     if (activeCategories.length > 0 && !selectedCat) {
       setSelectedCat(activeCategories[0].id)
     }
   }, [activeCategories])
+
+  useEffect(() => {
+    if (location.state?.preselectedCat) {
+      setSelectedCat(location.state.preselectedCat)
+    }
+  }, [location.state])
 
 
   // ── SERVER STATE: Today's entries ──────────────────────────────────────
@@ -194,6 +205,7 @@ export default function Dashboard() {
       queryClient.invalidateQueries({ queryKey: ['entries', user?.id, today] })
       queryClient.invalidateQueries({ queryKey: ['totalDays', user?.id] })
       queryClient.invalidateQueries({ queryKey: ['streak', user?.id] })
+      queryClient.invalidateQueries({ queryKey: ['entry-count', user?.id] }) // for sidebar count
       setNote('')
       setMinutes('')
       setSuccessMsg('✅ Logged! Keep grinding.')
@@ -214,6 +226,7 @@ export default function Dashboard() {
       queryClient.invalidateQueries({ queryKey: ['entries', user?.id, today] })
       queryClient.invalidateQueries({ queryKey: ['totalDays', user?.id] })
       queryClient.invalidateQueries({ queryKey: ['streak', user?.id] })
+      queryClient.invalidateQueries({ queryKey: ['entry-count', user?.id] }) // for sidebar count
       setDeleteId(null)
     },
   })

@@ -71,9 +71,46 @@ export default function Settings() {
     }
 
     async function handleDeleteAccount() {
-        // Sign out — actual account deletion requires a backend function
-        // This clears local session and shows them logged out
-        await signOut()
+        setSaving(true)
+
+        try {
+            // Get the user's session token — needed to prove identity to the Edge Function
+            const { data: { session } } = await supabase.auth.getSession()
+
+            if (!session) {
+                setPwError('Session expired. Please sign out and sign back in.')
+                setSaving(false)
+                return
+            }
+
+            const response = await fetch(
+                `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-account`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${session.access_token}`,
+                    },
+                }
+            )
+
+            const data = await response.json()
+
+            if (!response.ok || data.error) {
+                setPwError(data.error || 'Could not delete account. Try again.')
+                setSaving(false)
+                return
+            }
+
+            // Account deleted on the server — now sign out locally
+            // signOut() clears the local session so the user sees the auth page
+            await signOut()
+
+        } catch (err) {
+            console.error('Delete account error:', err)
+            setPwError('Something went wrong. Please try again.')
+            setSaving(false)
+        }
     }
 
     return (
