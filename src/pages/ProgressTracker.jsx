@@ -93,7 +93,9 @@ export default function ProgressTracker() {
   // ── STAT 4: Weekly consistency ──────────────────────────
   const last7Days = [...Array(7)].map((_, i) => {
     const d = new Date(); d.setDate(d.getDate() - i)
-    return d.toISOString().slice(0, 10)
+    // Use local date — toISOString() would give UTC date which mismatches
+    // the dates stored in DB (which should also be local, after Dashboard fix)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   })
   const daysWithEntries = last7Days.filter(day =>
     allEntries.some(e => e.date === day)
@@ -104,7 +106,7 @@ export default function ProgressTracker() {
   const realChartData = [...Array(numDays)].map((_, i) => {
     const d = new Date()
     d.setDate(d.getDate() - (numDays - 1 - i))
-    const dateStr = d.toISOString().slice(0, 10)
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
     const dayMins = allEntries
       .filter(e => e.date === dateStr)
       .reduce((s, e) => s + (e.minutes || 0), 0)
@@ -271,8 +273,8 @@ export default function ProgressTracker() {
                 key={range.id}
                 onClick={() => setDateRange(range.id)}
                 className={`px-3 py-1.5 rounded text-xs font-medium border transition-all ${dateRange === range.id
-                    ? 'bg-primary text-white border-primary'
-                    : 'border-border text-text-muted hover:bg-surface-low'
+                  ? 'bg-primary text-white border-primary'
+                  : 'border-border text-text-muted hover:bg-surface-low'
                   }`}
               >
                 🗓️ {range.label}

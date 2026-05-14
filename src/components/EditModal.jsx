@@ -11,19 +11,32 @@ export default function EditModal({ entry, onSave, onClose }) {
     const [minutes, setMinutes] = useState(entry.minutes || '')
     const [categoryId, setCategoryId] = useState(entry.category_id)
     const [saving, setSaving] = useState(false)
+    const [saveError, setSaveError] = useState(null)   // ← new: tracks save failure
     const { activeCategories: userCategories } = useCategories()
 
     async function handleSubmit(e) {
         e.preventDefault()
         if (!note.trim()) return
         setSaving(true)
-        await onSave({
-            id: entry.id,
-            note: note.trim(),
-            minutes: parseInt(minutes) || null,
-            category_id: categoryId,
-        })
-        setSaving(false)
+        setSaveError(null)       // clear any previous error before trying
+        try {
+            await onSave({
+                id: entry.id,
+                note: note.trim(),
+                minutes: parseInt(minutes) || null,
+                category_id: categoryId,
+            })
+            // onSave succeeded — the parent will close the modal
+        } catch (err) {
+            // Save failed (network drop, Supabase error, etc.)
+            // Show the message so the user knows and can retry
+            setSaveError(err.message || 'Save failed. Please try again.')
+        } finally {
+            // finally ALWAYS runs — success OR failure.
+            // This re-enables the button either way.
+            // If it were only in try: failed save = button stuck forever.
+            setSaving(false)
+        }
     }
 
     return (
@@ -73,6 +86,12 @@ export default function EditModal({ entry, onSave, onClose }) {
                             className="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-primary"
                         />
                     </div>
+                    {/* Error message — only shows when save fails */}
+                    {saveError && (
+                        <p className="text-xs text-red-400 bg-red-400/10 border border-red-400/20 rounded px-3 py-2">
+                            ⚠️ {saveError}
+                        </p>
+                    )}
                     <div className="flex gap-3 mt-4">
                         <button
                             type="button"

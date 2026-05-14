@@ -11,7 +11,7 @@ import Goals from './pages/Goals'
 import AIMotivation from './pages/AIMotivation'
 import OnboardingModal from './components/OnboardingModal'
 import Settings from './pages/Settings'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from './lib/supabase'
 // Add this import at the top of App.jsx
 import { useQueryClient } from '@tanstack/react-query'
@@ -22,12 +22,18 @@ function AppRoutes() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
   const queryClient = useQueryClient()
+  // useRef as a lock — survives re-renders but doesn't cause them.
+  // StrictMode runs every useEffect twice in dev. Without this guard,
+  // both runs see count=0 and both insert 3 category sets → 6 sets total.
+  // seedingRef.current = true blocks the second run before it starts.
+  const seedingRef = useRef(false)
 
-  // Replace the existing useEffect that triggers onboarding with this:
   useEffect(() => {
     if (!user) return
 
     async function checkAndSeed() {
+      if (seedingRef.current) return   // ← second StrictMode run bails here
+      seedingRef.current = true
       // Check if this user already has category sets
       const { count } = await supabase
         .from('category_sets')

@@ -91,9 +91,17 @@ function EntryCard({ entry, onDelete, onStatusChange, onEdit, getCategoryById })
 // Main Dashboard
 // ─────────────────────────────────────────────
 
+// Returns YYYY-MM-DD in the user's LOCAL timezone — not UTC.
+// toISOString() always gives the UTC date. For IST (UTC+5:30) users logging
+// between 12:00 AM and 5:30 AM, the UTC date is still "yesterday" → entries
+// get saved with the wrong date and show up under "Yesterday" in History.
+function getLocalDateStr(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export default function Dashboard() {
   const { user } = useAuth()
-  const today = new Date().toISOString().slice(0, 10)
+  const today = getLocalDateStr()   // ← was: new Date().toISOString().slice(0, 10)
   const location = useLocation()
 
   // ── queryClient lets us trigger invalidations from inside mutation callbacks ──
